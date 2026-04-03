@@ -45,3 +45,5 @@ frontend/android/app/profile
 frontend/android/app/release
 
 node_modules/
+
+backend/config/*.json
