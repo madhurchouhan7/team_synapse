@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:wattwise_app/feature/auth/providers/auth_provider.dart';
-import 'package:wattwise_app/feature/on_boarding/screens/on_boarding_screen.dart';
-import 'package:wattwise_app/feature/root/screens/root_screen.dart';
-import 'package:wattwise_app/feature/splash_screen/splash_screen.dart';
-import 'package:wattwise_app/feature/welcome/screens/welcome_screen.dart';
+import 'package:watt_sense/feature/auth/providers/auth_provider.dart';
+import 'package:watt_sense/feature/on_boarding/screens/on_boarding_screen.dart';
+import 'package:watt_sense/feature/root/screens/root_screen.dart';
+import 'package:watt_sense/feature/splash_screen/splash_screen.dart';
+import 'package:watt_sense/feature/welcome/screens/welcome_screen.dart';
 
 /// Central routing widget.
 /// Listens to [authStateProvider] and decides which screen to render.

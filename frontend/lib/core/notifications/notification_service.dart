@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:wattwise_app/core/network/api_client.dart';
+import 'package:watt_sense/core/network/api_client.dart';
 
 /// Global background handler for FCM messages.
 /// Must be a top-level function.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:wattwise_app/core/colors.dart';
+import 'package:watt_sense/core/colors.dart';
 
 class PrimaryButton extends StatelessWidget {
   final String label;
