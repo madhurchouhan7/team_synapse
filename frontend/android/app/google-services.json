@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "368122766341",
+    "project_id": "team-synapse-34703",
+    "storage_bucket": "team-synapse-34703.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:368122766341:android:963d9316cabdb9c040e86c",
+        "android_client_info": {
+          "package_name": "com.example.watt_sense"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_eWZ_KqhgFfnmTXxZJt_fx9MTLtGjwHs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
