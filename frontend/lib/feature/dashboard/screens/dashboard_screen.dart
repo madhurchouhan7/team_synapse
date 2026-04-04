@@ -358,8 +358,8 @@ class _DataView extends ConsumerWidget {
 
     final p = user!.activePlan!;
     final planName = p['planName']?.toString() ?? 'AI Efficiency Plan';
-    final estSavingsObj = p['estimatedSavingsIfFollowed'];
-    final pct = estSavingsObj?['percentage'] ?? 0;
+    final estSavingsObj = p['estimatedSavingsIfFollowed'] as Map<String, dynamic>?;
+    final pct = estSavingsObj?['percentage']?.toString() ?? '0';
     final tierDesc = 'Targeting $pct% savings';
 
     final savedBill = ref.watch(savedBillProvider);
@@ -369,17 +369,20 @@ class _DataView extends ConsumerWidget {
     var usageTarget = 'Optimizing...';
     double fillRatio = 0.0;
 
-    if (p['estimatedCurrentMonthlyCost'] != null &&
-        estSavingsObj?['rupees'] != null) {
-      final targetRupees =
-          (p['estimatedCurrentMonthlyCost'] - estSavingsObj['rupees'])
-              .toDouble();
+    final estCost = double.tryParse(p['estimatedCurrentMonthlyCost']?.toString() ?? '');
+    final estSavings = double.tryParse(estSavingsObj?['rupees']?.toString() ?? '');
+
+    if (estCost != null && estSavings != null) {
+      final targetRupees = estCost - estSavings;
 
       if (targetRupees > 0) {
         usageTarget =
             '₹${currentSpend.toInt()} / ₹${targetRupees.toInt()} Limit';
         fillRatio = currentSpend / targetRupees;
       }
+    } else if (currentSpend > 0) {
+      usageTarget = '₹${currentSpend.toInt()} Usage';
+      fillRatio = 0.3; // Show a small hint of progress if target is unavailable
     }
 
     return Container(
