@@ -2,6 +2,7 @@
   <img src="https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter" />
   <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js" />
   <img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" />
+  <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis" />
   <img src="https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=google-bard&logoColor=white" alt="Gemini AI" />
   <img src="https://img.shields.io/badge/LangGraph-FF9900?style=for-the-badge&logoColor=white" alt="LangGraph" />
   <img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase" />
@@ -20,7 +21,8 @@
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
-- [Getting Started (From Scratch)](#-getting-started-from-scratch)
+- [Environment Variables](#-environment-variables)
+- [Getting Started (Local Setup)](#-getting-started-local-setup)
   - [Prerequisites](#1-prerequisites)
   - [Backend Setup](#2-backend-setup)
   - [Frontend Setup](#3-frontend-setup)
@@ -35,9 +37,9 @@
 
 ## 🚀 Overview
 
-**WattSense** is an intelligent, cross-platform mobile application utilizing advanced AI architectures to monitor, analyze, and optimize smart home appliance energy consumption. Built for the **HACKSAGON** project, it leverages robust cloud backends, real-time AI agents powered by LangGraph & Google Gemini, and seamless mobile interfaces to give users a comprehensive, actionable breakdown of their power usage and expenditure.
+**WattSense** (formerly WattWise) is an intelligent, cross-platform mobile application utilizing advanced AI architectures to monitor, analyze, and optimize smart home appliance energy consumption. Built for the **HACKSAGON** project, it leverages robust cloud backends, real-time AI agents powered by LangGraph & Google Gemini, and seamless mobile interfaces to give users a comprehensive, actionable breakdown of their power usage and expenditure.
 
-With features ranging from real-time dashboard tracking to advanced, proactive efficiency plans and "upgrade advisors," WattSense transforms raw power data into sustainable, cost-saving strategies.
+With recent **Phase 2 Architecture Upgrades**, the platform now features an enterprise-grade backend with advanced Redis caching, a clean layered architecture (Repository & Service patterns), comprehensive security validations, and Tuya IoT platform integration for live hardware telemetry tracking.
 
 ---
 
@@ -48,6 +50,7 @@ With features ranging from real-time dashboard tracking to advanced, proactive e
   - **Efficiency Plan Agent:** Generates custom optimization schedules for devices.
   - **Bill Decoder Agent:** Parses external billing and telemetry data to find discrepancies.
   - **Upgrade Advisor Agent:** Recommends energy-efficient device replacements based on current wattage consumption and lifecycle.
+- **🌐 Tuya IoT Integration:** Native integration with Tuya Platform for live telemetry and physical device usage tracking.
 - **📷 Smart OCR & Reading Integration:** Scan utility bills easily using integrated Firebase ML Kit Text Recognition to auto-populate usage metrics.
 - **🔐 Secure Authentication:** Seamless user login via Firebase Auth (Google Sign-in integrated).
 - **🌍 Scalable Monorepo:** Structured optimally keeping isolation between Node.js servers, AI python-based pipelines (conceptual execution/state), and the Flutter clients.
@@ -59,7 +62,10 @@ With features ranging from real-time dashboard tracking to advanced, proactive e
 The application is structured as a **Monorepo** consisting of two main layers:
 
 1. **Frontend (Flutter):** Provides extreme cross-platform performance utilizing caching (Hive/SharedPreferences) and Riverpod State Management for a snappy UI.
-2. **Backend (Node.js/Express + MongoDB + Redis):** Interacts securely with the frontend and drives the core Logic, processing telemetry, appliance CRUD operations, caching metrics in Redis, and executing the LangGraph/Gemini AI models to return semantic planning.
+2. **Backend (Node.js/Express + MongoDB + Redis):** Employs an n-tier architecture:
+   - **Controllers:** HTTP layer handling routing, versioning, and unified response formats.
+   - **Services:** Pure business rules, LangGraph/AI pipeline execution, and caching logic.
+   - **Repositories:** Data access layer mapping to MongoDB isolated collections.
 
 ---
 
@@ -73,11 +79,13 @@ The application is structured as a **Monorepo** consisting of two main layers:
 - **Auth & Cloud Services:** Firebase Auth, Firebase Storage, Google ML Kit
 
 ### Backend
-- **Runtime & Web Framework:** Node.js, Express.js
+- **Framework:** Node.js, Express.js
 - **Database:** MongoDB (Mongoose)
-- **Caching & Job Queue:** Redis (`ioredis`)
+- **Caching & Rate Limiting:** Redis (`ioredis`)
+- **IoT Provider:** Tuya API
 - **AI / LLMs:** `@google/generative-ai`, `@langchain/google-genai`, `@langchain/langgraph`
-- **Validation:** Zod
+- **Validation & Security:** Zod, Helmet
+- **Logging:** Winston / Morgan (Structured JSON Logs)
 
 ---
 
@@ -86,133 +94,155 @@ The application is structured as a **Monorepo** consisting of two main layers:
 ```text
 team_synapse/
 ├── README.md                 # You are reading this
-├── package.json              # Monorepo/Root package settings
-├── .gitignore                # Global git ignores
-├── backend/                  # NODE.JS BACKEND DIRECTORY
-│   ├── src/                  # Application source code
-│   │   ├── app.js            # Express application entry point
-│   │   ├── controllers/      # Route handlers
-│   │   ├── routes/           # API Endpoints
-│   │   ├── models/           # Mongoose schemas & generic data models
-│   │   ├── services/         # LangGraph agents, Firebase logic, etc.
-│   │   └── utils/            # Helper functions / Zod schemas
-│   ├── .env                  # Backend environments (Not tracked)
+├── example.env               # Monorepo template for environment configurations
+├── package.json              # Monorepo script orchestration
+├── backend/                  # NODE.JS MODULAR BACKEND
+│   ├── src/
+│   │   ├── controllers/      # API entrypoints and versioning
+│   │   ├── services/         # Business logic & Cache operations
+│   │   ├── repositories/     # Database layer
+│   │   ├── models/           # Zod & Mongoose schemas (User, Address, Bill, etc.)
+│   │   ├── middlewares/      # Security, Validation, and Rate Limiters
+│   │   └── utils/            # Helper functions / Loggers
+│   ├── scripts/              # Database migration & auto-cleanup scripts
+│   ├── .env.example          # Extended Backend configuration blueprint
 │   └── package.json          # Backend dependencies
-└── frontend/                 # FLUTTER FRONTEND DIRECTORY
-    ├── lib/                  # Dart source code
+└── frontend/                 # FLUTTER FRONTEND
+    ├── lib/
     │   ├── main.dart         # Flutter execution entry point
-    │   ├── core/             # Network constants, themes, global utils
+    │   ├── core/             # Themes, global utils
     │   ├── features/         # Screen specific architectures
     │   └── providers/        # Riverpod logic & State definitions
-    ├── pubspec.yaml          # Flutter dependencies
-    └── assets/               # Splash screens, SVG icons, dummy datasets
+    └── pubspec.yaml          # Flutter dependencies
 ```
 
 ---
 
-## 🛠 Getting Started (From Scratch)
+## 🔐 Environment Variables
 
-Follow these steps to set up the development environment successfully. 
+Properly configuring the `.env` file is required before startup. We have provided an `example.env` at the root, and a more specific `.env.example` in the backend directory. 
+
+Create a `.env` file inside the `backend/` directory based on the example structure below.
+
+<details>
+<summary><b>Click to expand backend/.env configuration</b></summary>
+
+```env
+# ── Server ──
+PORT=5000
+NODE_ENV=development
+
+# ── MongoDB ──
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/wattsense
+
+# ── Redis ──
+REDIS_URL=redis://localhost:6379
+
+# ── Firebase Admin SDK ──
+FIREBASE_PROJECT_ID=your-project-id
+GOOGLE_APPLICATION_CREDENTIALS=./config/wattwise-firebase-adminsdk.json
+
+# ── Gemini AI ──
+GEMINI_API_KEY=your-gemini-api-key
+
+# ── TUYA IoT Platform Credentials ──
+TUYA_CLIENT_ID=your_tuya_access_key_here
+TUYA_CLIENT_SECRET=your_tuya_secret_key_here
+TUYA_BASE_URL=https://openapi.tuyaeu.com
+
+# ── Security ──
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5000
+JWT_SECRET=your-super-secret-jwt-key
+```
+</details>
+
+---
+
+## 🛠 Getting Started (Local Setup)
+
+Follow these steps to comprehensively run the full-stack system locally.
 
 ### 1. Prerequisites
-Ensure you have the following installed on your local machine:
 - **Git**
-- **Flutter SDK** (v3.10.0+ highly recommended) ([Installation Guide](https://docs.flutter.dev/get-started/install))
-- **Node.js** (v18.0.0+ LTS recommended) ([Download](https://nodejs.org/))
-- **MongoDB Database** (Local instance or MongoDB Atlas cluster URI)
+- **Flutter SDK** (v3.10.0+ recommended)
+- **Node.js** (v18.0.0+ LTS recommended)
+- **MongoDB** (Local instance or external SaaS Cluster)
 - **Redis Server** (Local instance running on `localhost:6379`)
-- **Google Gemini API Key** ([Get it here](https://aistudio.google.com/))
+- **Google Gemini API Key** ([aistudio.google.com](https://aistudio.google.com/))
+- **Tuya Developer Account** ([iot.tuya.com](https://iot.tuya.com) for physical hardware telemetry)
 
 ### 2. Backend Setup
 1. **Navigate to the backend directory:**
    ```bash
    cd backend
    ```
-2. **Install node dependencies:**
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 3. **Configure Environment Variables:**
-   Create a `.env` file in the `backend/` root directory (See [Environment Variables](#-environment-variables) below) and insert your credentials.
-
-4. **Start the backend development server:**
+   Copy the `backend/.env.example` to `backend/.env` and securely populate all fields.
+   ```bash
+   cp .env.example .env
+   ```
+4. **(Optional) Run Legacy Database Migrations:**
+   If migrating from Phase 1, automatically restructure your MongoDB schemas:
+   ```bash
+   AUTO_CLEANUP=true node scripts/migrateUserData.js
+   ```
+5. **Start the backend development server:**
    ```bash
    npm run dev
    ```
-   *The backend should successfully connect to MongoDB, sync with Redis, and initialize the LangGraph pipelines.*
+   *The server validates the Redis connection, connects to MongoDB, and verifies Tuya scopes before mounting the APIs. You can verify system health by hitting `http://localhost:5000/api/v1/health/detailed`.*
 
 ### 3. Frontend Setup
 1. **Navigate to the frontend directory:**
    ```bash
    cd frontend
    ```
-2. **Install Flutter packages & auto-generate code:**
+2. **Fetch packages & trigger automated build runners:**
    ```bash
    flutter pub get
    flutter pub run build_runner build --delete-conflicting-outputs
    ```
-   *The `build_runner` step is crucial for `freezed_annotation` and `json_serializable` class regeneration.*
-3. **Run the application:**
-   Ensure you have a simulator (iOS/Android) or a physical device connected.
+   *Generation of freezed, JSON serializable, and Riverpod artifacts is required.*
+3. **Run the Flutter application:**
+   Launch an iOS/Android Simulator or connect a physical device.
    ```bash
    flutter run
    ```
 
 ---
 
-## 🔐 Environment Variables
-
-The system relies on securely configured parameters. You must set up standard `.env` variables depending on the environment.
-
-**`backend/.env` Example:**
-```env
-# System Configs
-PORT=3000
-NODE_ENV=development
-
-# Databases
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/WattSense
-REDIS_URL=redis://localhost:6379
-
-# AI API Keys
-GEMINI_API_KEY=AIzaSyB_Your_Gemini_Key_Here
-OPENAI_API_KEY=sk-your-openai-key-here # Optional if fallback is needed
-
-# Firebase Admin configuration
-FIREBASE_SERVICE_ACCOUNT_BASE64=your_base64_encoded_firebase_admin_key
-```
-
----
-
 ## ⚡ Advanced Concepts
 
-### AI Agent Workflow (LangGraph & Gemini)
-WattSense utilizes an autonomous state-graph powered by **LangChain's LangGraph**. Rather than using simple zero-shot prompts, the backend employs multi-step reasoning:
-1. **Context Extraction:** User's device constraints and historical consumption telemetry are embedded into Pinecone vector storage.
-2. **Graph Traversal:** The input query initializes a graph workflow involving conditional routing. If a user asks for generic efficiency, the node pushes context to the `Efficiency Planner Agent`. If the system detects a heavily degrading hardware component tracking, it redirects to the `Upgrade Advisor`.
-3. **Response Assembly:** Post-processing nodes ensure strictly typed JSON outputs (enforced by Zod parsing) to be sent structurally back to the Flutter frontend application.
+### AI Agent Workflow (LangGraph)
+WattSense uses graph-oriented multi-step reasoning:
+1. **Context Parsing:** Tuya device states and MongoDB history form the vector state.
+2. **Graph Traversal:** Prompts route through specialized nodes (`EfficiencyPlanner`, `UpgradeAdvisor`, `BillDecoder`).
+3. **Zod Post-Processing:** Final output strictly mapped natively via Validation to structured payloads readable by Flutter.
 
-### Data Model & Telemetry
-High traffic bulk appliance updates are validated in real-time gracefully with schemas. When modifying thousands of data points at once, we utilize queued Redis transactions mapping out anomalous device state spikes avoiding sudden 500 server crashes.
+### Health Probes & Monitoring
+The backend actively tracks database IO, memory thresholds, and Redis miss rates. Endpoints such as `/health/ready` check whether container resources are primed prior to serving traffic—meaning WattSense is entirely Docker & Kubernetes compliant out-of-the-box.
 
 ---
 
 ## 🤝 Contributing
 
-We welcome community contributions to build better AI utilities! To contribute:
+We welcome community contributions! Please make sure to follow the new modular architecture when submitting backend features.
 
 1. Fork the Repository.
-2. Create a Feature Branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'feat: Added some AmazingFeature'`).
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'feat: Supported XYZ'`).
 4. Push to the Branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
-Make sure you've passed the existing linters before raising a PR:
+Ensure linters pass before raising a PR:
 ```bash
-# Frontend
+# Frontend Validation
 cd frontend && flutter analyze 
-
-# Backend
+# Backend Validation
 cd backend && npm run lint
 ```
 
