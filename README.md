@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=white" alt="Firebase" />
   
   <br />
-  <h1>⚡ WattWise (HACKSAGON Project)</h1>
+  <h1>⚡ WattSense (HACKSAGON Project)</h1>
   <p><h3>An AI-Powered Smart Home Appliance Energy Optimization Platform</h3></p>
 </div>
 
@@ -35,9 +35,9 @@
 
 ## 🚀 Overview
 
-**WattWise** is an intelligent, cross-platform mobile application utilizing advanced AI architectures to monitor, analyze, and optimize smart home appliance energy consumption. Built for the **HACKSAGON** project, it leverages robust cloud backends, real-time AI agents powered by LangGraph & Google Gemini, and seamless mobile interfaces to give users a comprehensive, actionable breakdown of their power usage and expenditure.
+**WattSense** is an intelligent, cross-platform mobile application utilizing advanced AI architectures to monitor, analyze, and optimize smart home appliance energy consumption. Built for the **HACKSAGON** project, it leverages robust cloud backends, real-time AI agents powered by LangGraph & Google Gemini, and seamless mobile interfaces to give users a comprehensive, actionable breakdown of their power usage and expenditure.
 
-With features ranging from real-time dashboard tracking to advanced, proactive efficiency plans and "upgrade advisors," WattWise transforms raw power data into sustainable, cost-saving strategies.
+With features ranging from real-time dashboard tracking to advanced, proactive efficiency plans and "upgrade advisors," WattSense transforms raw power data into sustainable, cost-saving strategies.
 
 ---
 
@@ -171,7 +171,7 @@ PORT=3000
 NODE_ENV=development
 
 # Databases
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/wattwise
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/WattSense
 REDIS_URL=redis://localhost:6379
 
 # AI API Keys
@@ -187,7 +187,7 @@ FIREBASE_SERVICE_ACCOUNT_BASE64=your_base64_encoded_firebase_admin_key
 ## ⚡ Advanced Concepts
 
 ### AI Agent Workflow (LangGraph & Gemini)
-WattWise utilizes an autonomous state-graph powered by **LangChain's LangGraph**. Rather than using simple zero-shot prompts, the backend employs multi-step reasoning:
+WattSense utilizes an autonomous state-graph powered by **LangChain's LangGraph**. Rather than using simple zero-shot prompts, the backend employs multi-step reasoning:
 1. **Context Extraction:** User's device constraints and historical consumption telemetry are embedded into Pinecone vector storage.
 2. **Graph Traversal:** The input query initializes a graph workflow involving conditional routing. If a user asks for generic efficiency, the node pushes context to the `Efficiency Planner Agent`. If the system detects a heavily degrading hardware component tracking, it redirects to the `Upgrade Advisor`.
 3. **Response Assembly:** Post-processing nodes ensure strictly typed JSON outputs (enforced by Zod parsing) to be sent structurally back to the Flutter frontend application.
@@ -223,5 +223,5 @@ cd backend && npm run lint
 This application and related codebase are currently developed for **HACKSAGON Project** boundaries. 
 
 <div align="center">
-  <sub>Built with ❤️ by the WattWise (Team Synapse) Developers</sub>
+  <sub>Built with ❤️ by the WattSense (Team Synapse) Developers</sub>
 </div>
