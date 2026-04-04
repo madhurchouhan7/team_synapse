@@ -8,9 +8,10 @@ import 'package:watt_sense/feature/smart_plug/models/smart_plug_model.dart';
 
 // ── Smart plug list provider ──────────────────────────────────────────────────
 final smartPlugListProvider =
-    StateNotifierProvider<SmartPlugListNotifier, AsyncValue<List<SmartPlugModel>>>(
-  (_) => SmartPlugListNotifier(),
-);
+    StateNotifierProvider<
+      SmartPlugListNotifier,
+      AsyncValue<List<SmartPlugModel>>
+    >((_) => SmartPlugListNotifier());
 
 class SmartPlugListNotifier
     extends StateNotifier<AsyncValue<List<SmartPlugModel>>> {
@@ -45,17 +46,21 @@ class SmartPlugListNotifier
   }) async {
     try {
       final body = <String, dynamic>{
-        'name':     name,
-        'vendor':   vendor,
+        'name': name,
+        'vendor': vendor,
         'isSimulated': isSimulated,
         if (location != null) 'location': location,
         if (baselineWattage != null) 'baselineWattage': baselineWattage,
         if (tuyaDeviceId != null) 'tuyaDeviceId': tuyaDeviceId,
       };
 
-      final response = await ApiClient.instance.post('/smart-plugs', data: body);
+      final response = await ApiClient.instance.post(
+        '/smart-plugs',
+        data: body,
+      );
       final plug = SmartPlugModel.fromMap(
-          response.data['data'] as Map<String, dynamic>);
+        response.data['data'] as Map<String, dynamic>,
+      );
 
       state = state.whenData((plugs) => [plug, ...plugs]);
       return plug;
@@ -67,16 +72,22 @@ class SmartPlugListNotifier
   /// Delete a plug.
   Future<void> deletePlug(String id) async {
     await ApiClient.instance.delete('/smart-plugs/$id');
-    state = state.whenData(
-        (plugs) => plugs.where((p) => p.id != id).toList());
+    state = state.whenData((plugs) => plugs.where((p) => p.id != id).toList());
   }
 
   /// Manually trigger a reading with optional spike.
-  Future<void> triggerReading(String id, {bool forceSpike = false}) async {
-    await ApiClient.instance.post(
+  Future<bool> triggerReading(String id, {bool forceSpike = false}) async {
+    final response = await ApiClient.instance.post(
       '/smart-plugs/$id/simulate',
       data: {'forceSpike': forceSpike},
     );
+
+    // Keep REST snapshot in sync so dashboard can reflect anomaly state
+    // even if a websocket event is delayed or unavailable.
+    await _load();
+
+    final data = response.data['data'] as Map<String, dynamic>?;
+    return data?['isAnomaly'] == true;
   }
 
   /// Turn a real Tuya plug on or off.
@@ -90,9 +101,10 @@ class SmartPlugListNotifier
 
 // ── Summary provider ──────────────────────────────────────────────────────────
 final smartPlugSummaryProvider =
-    StateNotifierProvider<SmartPlugSummaryNotifier, AsyncValue<SmartPlugSummary>>(
-  (_) => SmartPlugSummaryNotifier(),
-);
+    StateNotifierProvider<
+      SmartPlugSummaryNotifier,
+      AsyncValue<SmartPlugSummary>
+    >((_) => SmartPlugSummaryNotifier());
 
 class SmartPlugSummary {
   final int totalPlugs;
@@ -101,10 +113,10 @@ class SmartPlugSummary {
   final double liveWattage;
 
   const SmartPlugSummary({
-    this.totalPlugs   = 0,
-    this.onlinePlugs  = 0,
+    this.totalPlugs = 0,
+    this.onlinePlugs = 0,
     this.anomalyPlugs = 0,
-    this.liveWattage  = 0,
+    this.liveWattage = 0,
   });
 
   bool get hasAnomalies => anomalyPlugs > 0;
@@ -120,12 +132,14 @@ class SmartPlugSummaryNotifier
     try {
       final response = await ApiClient.instance.get('/smart-plugs/summary');
       final d = response.data['data'] as Map<String, dynamic>;
-      state = AsyncValue.data(SmartPlugSummary(
-        totalPlugs:   d['totalPlugs'] as int? ?? 0,
-        onlinePlugs:  d['onlinePlugs'] as int? ?? 0,
-        anomalyPlugs: d['anomalyPlugs'] as int? ?? 0,
-        liveWattage: (d['liveWattage'] as num?)?.toDouble() ?? 0,
-      ));
+      state = AsyncValue.data(
+        SmartPlugSummary(
+          totalPlugs: d['totalPlugs'] as int? ?? 0,
+          onlinePlugs: d['onlinePlugs'] as int? ?? 0,
+          anomalyPlugs: d['anomalyPlugs'] as int? ?? 0,
+          liveWattage: (d['liveWattage'] as num?)?.toDouble() ?? 0,
+        ),
+      );
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -135,17 +149,20 @@ class SmartPlugSummaryNotifier
 }
 
 // ── Tuya device discovery provider ───────────────────────────────────────────
-final tuyaDevicesProvider =
-    FutureProvider<List<TuyaDevice>>((ref) async {
+final tuyaDevicesProvider = FutureProvider<List<TuyaDevice>>((ref) async {
   final response = await ApiClient.instance.get('/smart-plugs/tuya-devices');
   final list = response.data['data'];
   if (list == null) return [];
   if (list is List) {
-    return list.map((e) => TuyaDevice.fromMap(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => TuyaDevice.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
   // Some Tuya endpoints wrap in { list: [...] }
   final inner = (list as Map)['list'] as List? ?? [];
-  return inner.map((e) => TuyaDevice.fromMap(e as Map<String, dynamic>)).toList();
+  return inner
+      .map((e) => TuyaDevice.fromMap(e as Map<String, dynamic>))
+      .toList();
 });
 
 class TuyaDevice {
@@ -162,9 +179,9 @@ class TuyaDevice {
   });
 
   factory TuyaDevice.fromMap(Map<String, dynamic> m) => TuyaDevice(
-    id:       m['id'] as String? ?? m['device_id'] as String? ?? '',
-    name:     m['name'] as String? ?? 'Unknown Device',
+    id: m['id'] as String? ?? m['device_id'] as String? ?? '',
+    name: m['name'] as String? ?? 'Unknown Device',
     category: m['category'] as String? ?? 'unknown',
-    online:   m['online'] as bool? ?? false,
+    online: m['online'] as bool? ?? false,
   );
 }

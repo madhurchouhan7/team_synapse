@@ -15,6 +15,7 @@ import 'package:watt_sense/feature/insights/widgets/streak_card.dart';
 import 'package:watt_sense/feature/bill/screen/add_bill_screen.dart';
 import 'package:watt_sense/feature/notifications/screens/notification_list_screen.dart';
 import 'package:watt_sense/feature/insights/providers/heatmap_provider.dart';
+import 'package:watt_sense/feature/smart_plug/models/smart_plug_model.dart';
 import 'package:watt_sense/feature/smart_plug/providers/smart_plug_provider.dart';
 import 'package:watt_sense/feature/smart_plug/providers/ws_telemetry_provider.dart';
 import 'package:watt_sense/feature/smart_plug/screens/smart_plug_screen.dart';
@@ -138,6 +139,193 @@ class _DataView extends ConsumerStatefulWidget {
 }
 
 class _DataViewState extends ConsumerState<_DataView> {
+  final ScrollController _scrollController = ScrollController();
+  late final ProviderSubscription<WsTelemetryState> _wsSub;
+  late final ProviderSubscription<AsyncValue<List<SmartPlugModel>>> _plugSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureWsConnection();
+
+    _wsSub = ref.listenManual<WsTelemetryState>(wsTelemetryProvider, (
+      previous,
+      next,
+    ) {
+      final prevAnomalyTs = previous?.latestAnomaly?.data['timestamp']
+          ?.toString();
+      final nextAnomalyTs = next.latestAnomaly?.data['timestamp']?.toString();
+      final prevHadLive = previous?.hasAnomalies ?? false;
+      final hasNewAnomalyEvent =
+          nextAnomalyTs != null && nextAnomalyTs != prevAnomalyTs;
+      final hasFreshLiveAnomaly = !prevHadLive && next.hasAnomalies;
+
+      if (hasNewAnomalyEvent || hasFreshLiveAnomaly) {
+        _scrollToTop();
+      }
+    });
+
+    _plugSub = ref.listenManual<AsyncValue<List<SmartPlugModel>>>(
+      smartPlugListProvider,
+      (previous, next) {
+        final prevHasRestAnomaly = _hasRestAnomaly(previous?.valueOrNull ?? []);
+        final nextHasRestAnomaly = _hasRestAnomaly(next.valueOrNull ?? []);
+        if (!prevHasRestAnomaly && nextHasRestAnomaly) {
+          _scrollToTop();
+        }
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _DataView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user?.uid != widget.user?.uid) {
+      _ensureWsConnection();
+    }
+  }
+
+  void _ensureWsConnection() {
+    final uid = widget.user?.uid;
+    if (uid == null) return;
+    Future.microtask(() {
+      if (!mounted) return;
+      ref.read(wsTelemetryProvider.notifier).connect(uid);
+    });
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  bool _hasRestAnomaly(List<SmartPlugModel> plugs) {
+    return plugs.any((p) => p.lastReading?.isAnomaly == true);
+  }
+
+  Widget _buildImmediateAnomalyBanner(BuildContext context) {
+    final wsState = ref.watch(wsTelemetryProvider);
+    final plugs = ref.watch(smartPlugListProvider).valueOrNull ?? [];
+    final restAnomalies = plugs.where((p) => p.lastReading?.isAnomaly == true);
+
+    final hasWsEvent = wsState.latestAnomaly != null;
+    final hasLiveAnomaly = wsState.hasAnomalies;
+    final hasRestOnlyAnomaly = restAnomalies.isNotEmpty;
+
+    if (!hasWsEvent && !hasLiveAnomaly && !hasRestOnlyAnomaly) {
+      return const SizedBox.shrink();
+    }
+
+    String title = 'Abnormal Usage Detected';
+    String message = 'Check your smart plugs for unusual usage.';
+
+    if (hasWsEvent) {
+      final d = wsState.latestAnomaly!.data;
+      final name = d['applianceName'] ?? d['plugName'] ?? 'Device';
+      final wattage = (d['wattage'] as num?)?.toStringAsFixed(0);
+      title = 'Abnormal: $name';
+      message = wattage != null
+          ? '$name is drawing ${wattage}W. Open Smart Plugs for details.'
+          : '$name reported abnormal usage. Open Smart Plugs for details.';
+    } else if (hasLiveAnomaly) {
+      final p = wsState.anomalousPlugs.first;
+      title = 'Abnormal: ${p.plugName}';
+      message =
+          '${p.plugName} is drawing ${p.wattage.toStringAsFixed(0)}W. Open Smart Plugs for details.';
+    } else {
+      final p = restAnomalies.first;
+      title = 'Abnormal: ${p.name}';
+      final wattage = p.lastReading?.wattage;
+      message = wattage != null
+          ? '${p.name} last reading is ${wattage.toStringAsFixed(0)}W and flagged as anomaly.'
+          : '${p.name} was flagged as anomaly in last reading.';
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEF4444).withOpacity(0.32),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SmartPlugScreen()));
+        },
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white.withOpacity(0.92),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _wsSub.close();
+    _plugSub.close();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -154,11 +342,24 @@ class _DataViewState extends ConsumerState<_DataView> {
           ref.read(smartPlugSummaryProvider.notifier).refresh();
         },
         child: SingleChildScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildImmediateAnomalyBanner(context),
+
+              // ── Anomaly Alert Banner (top-most) ─────────────────────────
+              AnomalyAlertBanner(
+                onViewDetails: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+
               DashboardAppBar(
                 displayName: widget.displayName,
                 user: widget.user,
@@ -178,19 +379,6 @@ class _DataViewState extends ConsumerState<_DataView> {
                   );
                 },
               ),
-              const SizedBox(height: 16),
-
-              // ── Anomaly Alert Banner ──────────────────────────────────
-              AnomalyAlertBanner(
-                onViewDetails: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SmartPlugScreen(),
-                    ),
-                  );
-                },
-              ),
-
               const SizedBox(height: 16),
               _buildStatCards(),
 
@@ -339,10 +527,7 @@ class _DataViewState extends ConsumerState<_DataView> {
     );
   }
 
-  Widget _buildActivePlanCard(
-    BuildContext context,
-    UserModel? user,
-  ) {
+  Widget _buildActivePlanCard(BuildContext context, UserModel? user) {
     if (user?.activePlan == null) {
       return Container(
         width: double.infinity,
@@ -387,7 +572,8 @@ class _DataViewState extends ConsumerState<_DataView> {
 
     final p = user!.activePlan!;
     final planName = p['planName']?.toString() ?? 'AI Efficiency Plan';
-    final estSavingsObj = p['estimatedSavingsIfFollowed'] as Map<String, dynamic>?;
+    final estSavingsObj =
+        p['estimatedSavingsIfFollowed'] as Map<String, dynamic>?;
     final pct = estSavingsObj?['percentage']?.toString() ?? '0';
     final tierDesc = 'Targeting $pct% savings';
 
@@ -398,8 +584,12 @@ class _DataViewState extends ConsumerState<_DataView> {
     var usageTarget = 'Optimizing...';
     double fillRatio = 0.0;
 
-    final estCost = double.tryParse(p['estimatedCurrentMonthlyCost']?.toString() ?? '');
-    final estSavings = double.tryParse(estSavingsObj?['rupees']?.toString() ?? '');
+    final estCost = double.tryParse(
+      p['estimatedCurrentMonthlyCost']?.toString() ?? '',
+    );
+    final estSavings = double.tryParse(
+      estSavingsObj?['rupees']?.toString() ?? '',
+    );
 
     if (estCost != null && estSavings != null) {
       final targetRupees = estCost - estSavings;
@@ -732,31 +922,38 @@ class _DataViewState extends ConsumerState<_DataView> {
   }
 
   Widget _buildSmartPlugSection(BuildContext context) {
-    final wsState    = ref.watch(wsTelemetryProvider);
+    final wsState = ref.watch(wsTelemetryProvider);
     final plugsAsync = ref.watch(smartPlugListProvider);
-    final liveData   = wsState.liveData;
-
-    // Derive plug list from WS data OR fallback to REST list
+    final liveData = wsState.liveData;
     final plugList = plugsAsync.valueOrNull ?? [];
-
-    // Nothing to show if no plugs registered at all
-    if (liveData.isEmpty && plugList.isEmpty) return const SizedBox.shrink();
+    final isLoading = plugsAsync.isLoading;
+    final hasError = plugsAsync.hasError;
 
     // Build a display list merging REST + WS wattage
     final displayPlugs = plugList.map((plug) {
       final live = liveData[plug.plugId];
       final wattage = live?.wattage ?? plug.lastReading?.wattage ?? 0.0;
-      final isAnomaly = live?.isAnomaly ?? (plug.lastReading?.isAnomaly ?? false);
-      return (plug: plug, wattage: wattage, isAnomaly: isAnomaly, isLive: live != null);
+      final isAnomaly =
+          live?.isAnomaly ?? (plug.lastReading?.isAnomaly ?? false);
+      return (
+        plug: plug,
+        wattage: wattage,
+        isAnomaly: isAnomaly,
+        isLive: live != null,
+      );
     }).toList();
 
     // Total wattage: prefer WS sum when available, else sum DB snapshots
     final totalW = liveData.isNotEmpty
         ? wsState.totalLiveWattage
-        : plugList.fold<double>(0.0, (s, p) => s + (p.lastReading?.wattage ?? 0.0));
+        : plugList.fold<double>(
+            0.0,
+            (s, p) => s + (p.lastReading?.wattage ?? 0.0),
+          );
 
     final anomalyCount = displayPlugs.where((e) => e.isAnomaly).length;
     final isLiveStreaming = liveData.isNotEmpty;
+    final hasAnyPlugData = liveData.isNotEmpty || displayPlugs.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -769,136 +966,44 @@ class _DataViewState extends ConsumerState<_DataView> {
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
               ),
-              child: Text('Manage',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: const Color(0xFF1E60F2),
-                    fontWeight: FontWeight.w600,
-                  )),
+              child: Text(
+                'Manage',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: const Color(0xFF1E60F2),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 12),
         // Live wattage total card
-        GestureDetector(
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
-          ),
-          child: Container(
+        if (!hasAnyPlugData)
+          Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E60F2), Color(0xFF144CC7)],
-                begin: Alignment.topLeft,
-                end:   Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF1E60F2).withOpacity(0.25),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.electrical_services_rounded,
-                    color: Colors.white, size: 28),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${totalW.toStringAsFixed(1)} W',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      '${plugList.length} plug${plugList.length > 1 ? 's' : ''} · ${isLiveStreaming ? 'Live' : 'Last known'}',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                if (anomalyCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            color: Colors.white, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$anomalyCount Alert${anomalyCount > 1 ? 's' : ''}',
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Colors.white, size: 22),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Per-plug mini cards
-        ...displayPlugs.map((item) {
-          final color = item.isAnomaly
-              ? const Color(0xFFEF4444)
-              : item.isLive
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFF94A3B8);
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: item.isAnomaly
-                    ? const Color(0xFFEF4444).withOpacity(0.4)
-                    : Colors.grey.shade100,
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.08),
+                    color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    item.isAnomaly
-                        ? Icons.warning_amber_rounded
-                        : Icons.electrical_services_rounded,
-                    color: color,
+                    hasError
+                        ? Icons.error_outline_rounded
+                        : isLoading
+                        ? Icons.hourglass_top_rounded
+                        : Icons.electrical_services_outlined,
+                    color: const Color(0xFF1E60F2),
                     size: 18,
                   ),
                 ),
@@ -908,70 +1013,262 @@ class _DataViewState extends ConsumerState<_DataView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item.plug.name,
+                        hasError
+                            ? 'Could not load smart plugs'
+                            : isLoading
+                            ? 'Loading smart plugs...'
+                            : 'No smart plugs added yet',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           color: const Color(0xFF0F172A),
                         ),
                       ),
-                      if (item.plug.location != null)
-                        Text(
-                          item.plug.location!,
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: const Color(0xFF94A3B8),
+                      const SizedBox(height: 4),
+                      Text(
+                        hasError
+                            ? 'Pull to refresh or open Manage to retry.'
+                            : isLoading
+                            ? 'Fetching your smart plug devices.'
+                            : 'Add your first plug in Manage to see live wattage here.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFF64748B),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SmartPlugScreen(),
                           ),
                         ),
+                        child: Text(
+                          hasError ? 'Open Manage' : 'Manage Smart Plugs',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: const Color(0xFF1E60F2),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${item.wattage.toStringAsFixed(1)} W',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: item.isAnomaly
-                            ? const Color(0xFFEF4444)
-                            : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6, height: 6,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          item.isAnomaly ? 'Alert' : item.isLive ? 'Live' : 'Idle',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10,
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
               ],
             ),
-          );
-        }),
+          )
+        else ...[
+          GestureDetector(
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const SmartPlugScreen())),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E60F2), Color(0xFF144CC7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1E60F2).withOpacity(0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.electrical_services_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${totalW.toStringAsFixed(1)} W',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '${plugList.length} plug${plugList.length > 1 ? 's' : ''} · ${isLiveStreaming ? 'Live' : 'Last known'}',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  if (anomalyCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$anomalyCount Alert${anomalyCount > 1 ? 's' : ''}',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Per-plug mini cards
+          ...displayPlugs.map((item) {
+            final color = item.isAnomaly
+                ? const Color(0xFFEF4444)
+                : item.isLive
+                ? const Color(0xFF10B981)
+                : const Color(0xFF94A3B8);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: item.isAnomaly
+                      ? const Color(0xFFEF4444).withOpacity(0.4)
+                      : Colors.grey.shade100,
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      item.isAnomaly
+                          ? Icons.warning_amber_rounded
+                          : Icons.electrical_services_rounded,
+                      color: color,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.plug.name,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        if (item.plug.location != null)
+                          Text(
+                            item.plug.location!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: const Color(0xFF94A3B8),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${item.wattage.toStringAsFixed(1)} W',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: item.isAnomaly
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.isAnomaly
+                                ? 'Alert'
+                                : item.isLive
+                                ? 'Live'
+                                : 'Idle',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ],
     );
   }
 
   Widget _buildRecentActivity() {
-
     final savedBill = ref.watch(savedBillProvider);
     final activities = <Map<String, dynamic>>[];
 

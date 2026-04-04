@@ -19,7 +19,7 @@ class LivePlugData {
   final double wattage;
   final double voltage;
   final bool isAnomaly;
-  final String? deviceState;   // e.g. 'cooling', 'compressor_on'
+  final String? deviceState; // e.g. 'cooling', 'compressor_on'
   final DateTime timestamp;
   final List<TelemetryReading> history;
 
@@ -42,18 +42,17 @@ class LivePlugData {
     String? deviceState,
     DateTime? timestamp,
     List<TelemetryReading>? history,
-  }) =>
-      LivePlugData(
-        plugId:        plugId,
-        plugName:      plugName,
-        applianceName: applianceName,
-        wattage:       wattage ?? this.wattage,
-        voltage:       voltage ?? this.voltage,
-        isAnomaly:     isAnomaly ?? this.isAnomaly,
-        deviceState:   deviceState ?? this.deviceState,
-        timestamp:     timestamp ?? this.timestamp,
-        history:       history ?? this.history,
-      );
+  }) => LivePlugData(
+    plugId: plugId,
+    plugName: plugName,
+    applianceName: applianceName,
+    wattage: wattage ?? this.wattage,
+    voltage: voltage ?? this.voltage,
+    isAnomaly: isAnomaly ?? this.isAnomaly,
+    deviceState: deviceState ?? this.deviceState,
+    timestamp: timestamp ?? this.timestamp,
+    history: history ?? this.history,
+  );
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -68,7 +67,7 @@ class WsTelemetryState {
   final bool isConnected;
 
   const WsTelemetryState({
-    this.liveData    = const {},
+    this.liveData = const {},
     this.latestAnomaly,
     this.isConnected = false,
   });
@@ -77,18 +76,16 @@ class WsTelemetryState {
     Map<String, LivePlugData>? liveData,
     WsEvent? latestAnomaly,
     bool? isConnected,
-  }) =>
-      WsTelemetryState(
-        liveData:      liveData      ?? this.liveData,
-        latestAnomaly: latestAnomaly ?? this.latestAnomaly,
-        isConnected:   isConnected   ?? this.isConnected,
-      );
+  }) => WsTelemetryState(
+    liveData: liveData ?? this.liveData,
+    latestAnomaly: latestAnomaly ?? this.latestAnomaly,
+    isConnected: isConnected ?? this.isConnected,
+  );
 
   double get totalLiveWattage =>
       liveData.values.fold(0.0, (s, d) => s + d.wattage);
 
-  bool get hasAnomalies =>
-      liveData.values.any((d) => d.isAnomaly);
+  bool get hasAnomalies => liveData.values.any((d) => d.isAnomaly);
 
   List<LivePlugData> get anomalousPlugs =>
       liveData.values.where((d) => d.isAnomaly).toList();
@@ -98,24 +95,40 @@ class WsTelemetryState {
 
 final wsTelemetryProvider =
     StateNotifierProvider<WsTelemetryNotifier, WsTelemetryState>(
-  (_) => WsTelemetryNotifier(),
-);
+      (_) => WsTelemetryNotifier(),
+    );
 
 class WsTelemetryNotifier extends StateNotifier<WsTelemetryState> {
   StreamSubscription<WsEvent>? _sub;
+  String? _connectedUserId;
 
   WsTelemetryNotifier() : super(const WsTelemetryState());
 
   /// Connect the WebSocket and start listening.
   void connect(String userId) {
+    final sameUser = _connectedUserId == userId;
+    if (sameUser && _sub != null && WsClient.instance.isConnected) {
+      state = state.copyWith(isConnected: true);
+      return;
+    }
+
+    if (!sameUser && _connectedUserId != null) {
+      _sub?.cancel();
+      _sub = null;
+      WsClient.instance.disconnect();
+    }
+
+    _connectedUserId = userId;
     WsClient.instance.connect(userId: userId);
 
-    _sub = WsClient.instance.stream.listen(_handleEvent);
+    _sub ??= WsClient.instance.stream.listen(_handleEvent);
     state = state.copyWith(isConnected: true);
   }
 
   void disconnect() {
     _sub?.cancel();
+    _sub = null;
+    _connectedUserId = null;
     WsClient.instance.disconnect();
     state = state.copyWith(isConnected: false);
   }
@@ -136,42 +149,43 @@ class WsTelemetryNotifier extends StateNotifier<WsTelemetryState> {
 
   void _handleReading(WsEvent event) {
     final d = event.data;
-    final plugId        = d['plugId'] as String? ?? '';
-    final plugName      = d['plugName'] as String? ?? plugId;
+    final plugId = d['plugId'] as String? ?? '';
+    final plugName = d['plugName'] as String? ?? plugId;
     final applianceName = d['applianceName'] as String? ?? plugName;
-    final wattage       = (d['wattage'] as num?)?.toDouble() ?? 0.0;
-    final voltage       = (d['voltage'] as num?)?.toDouble() ?? 230.0;
-    final isAnomaly     = d['isAnomaly'] as bool? ?? false;
-    final deviceState   = d['deviceState'] as String?;
-    final ts            = DateTime.tryParse(d['timestamp'] as String? ?? '') ?? DateTime.now();
+    final wattage = (d['wattage'] as num?)?.toDouble() ?? 0.0;
+    final voltage = (d['voltage'] as num?)?.toDouble() ?? 230.0;
+    final isAnomaly = d['isAnomaly'] as bool? ?? false;
+    final deviceState = d['deviceState'] as String?;
+    final ts =
+        DateTime.tryParse(d['timestamp'] as String? ?? '') ?? DateTime.now();
 
     // Build a lightweight TelemetryReading for the history buffer
     final reading = TelemetryReading(
-      id:          '',
-      plugId:      plugId,
-      wattage:     wattage,
-      voltage:     voltage,
-      isAnomaly:   isAnomaly,
-      timestamp:   ts,
+      id: '',
+      plugId: plugId,
+      wattage: wattage,
+      voltage: voltage,
+      isAnomaly: isAnomaly,
+      timestamp: ts,
     );
 
     final existing = state.liveData[plugId];
-    final history  = List<TelemetryReading>.from(existing?.history ?? []);
+    final history = List<TelemetryReading>.from(existing?.history ?? []);
     history.add(reading);
     if (history.length > _kHistoryLimit) {
       history.removeRange(0, history.length - _kHistoryLimit);
     }
 
     final newData = LivePlugData(
-      plugId:        plugId,
-      plugName:      plugName,
+      plugId: plugId,
+      plugName: plugName,
       applianceName: applianceName,
-      wattage:       wattage,
-      voltage:       voltage,
-      isAnomaly:     isAnomaly,
-      deviceState:   deviceState,
-      timestamp:     ts,
-      history:       history,
+      wattage: wattage,
+      voltage: voltage,
+      isAnomaly: isAnomaly,
+      deviceState: deviceState,
+      timestamp: ts,
+      history: history,
     );
 
     final updated = Map<String, LivePlugData>.from(state.liveData);
@@ -186,9 +200,9 @@ class WsTelemetryNotifier extends StateNotifier<WsTelemetryState> {
   /// Clear the latest anomaly alert (after user dismisses banner)
   void clearAnomaly() {
     state = WsTelemetryState(
-      liveData:      state.liveData,
+      liveData: state.liveData,
       latestAnomaly: null,
-      isConnected:   state.isConnected,
+      isConnected: state.isConnected,
     );
   }
 
