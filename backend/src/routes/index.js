@@ -16,6 +16,15 @@ const contentRoutes = require("./content.routes");
 const solarRoutes = require("./solar.routes");
 const supportRoutes = require("./support.routes");
 
+// Health / Ping Route
+router.get("/ping", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Server is up and running",
+    timestamp: new Date().toISOString()
+  });
+});
+
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/addresses", addressRoutes);
