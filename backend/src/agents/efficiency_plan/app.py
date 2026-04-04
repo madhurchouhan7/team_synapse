@@ -109,7 +109,7 @@ def _log_agentic_plan(event: str, payload: dict) -> None:
 
 async def _fetch_weather(location: str) -> str:
     """Fetch real-time weather from OpenWeather API."""
-    api_key = os.environ.get("OPENWEATHER_API_KEY")
+    api_key = os.environ.get("OPEN_WEATHER_API_KEY")
     if not api_key:
         return "No live weather data provided."
 

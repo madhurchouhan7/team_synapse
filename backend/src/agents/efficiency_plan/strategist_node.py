@@ -54,9 +54,9 @@ def _build_default_strategies() -> list[dict]:
     ]
 
 
-# Initialize LangChain OpenAI client targeting OpenRouter API (Grok)
+# Initialize LangChain OpenAI client targeting OpenRouter API (Groq)
 llm = ChatOpenAI(
-    model="x-ai/grok-3-mini-beta",
+    model="groq/llama-3.3-70b-versatile",
     api_key=os.environ.get("OPENROUTER_API_KEY", "dummy"),
     base_url="https://openrouter.ai/api/v1",
     temperature=0.2,

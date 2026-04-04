@@ -1,6 +1,7 @@
 // src/controllers/ai.controller.js
 const { sendSuccess } = require("../utils/ApiResponse");
 const ApiError = require("../utils/ApiError");
+const Appliance = require("../models/Appliance.model");
 
 const FASTAPI_URL = process.env.LANGGRAPH_SERVICE_URL || "http://127.0.0.1:8000";
 
@@ -53,20 +54,28 @@ const getEfficiencyPlan = async (req, res, next) => {
     const firebaseUid = req.user?.firebaseUid;
     if (firebaseUid) headers["x-user-firebase-uid"] = String(firebaseUid);
 
+    // FIX: If frontend hasn't sent appliances, manually fetch and inject them from MongoDB
+    if (!req.body.appliances || req.body.appliances.length === 0) {
+      if (userId) {
+        const userAppliances = await Appliance.find({ userId: userId }).lean();
+        req.body.appliances = userAppliances;
+      }
+    }
+
     const response = await fetch(`${FASTAPI_URL}/generate-plan`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(req.body)
+      method: "POST",
+      headers,
+      body: JSON.stringify(req.body)
     });
 
     if (!response.ok) {
-        let errorData;
-        try {
-            errorData = await response.json();
-        } catch(e) {
-            errorData = { detail: response.statusText };
-        }
-        throw new ApiError(response.status, errorData.detail || "Failed to generate plan from agent service");
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { detail: response.statusText };
+      }
+      throw new ApiError(response.status, errorData.detail || "Failed to generate plan from agent service");
     }
 
     const result = await response.json();
@@ -74,8 +83,8 @@ const getEfficiencyPlan = async (req, res, next) => {
 
   } catch (error) {
     if (error.cause && error.cause.code === 'ECONNREFUSED') {
-       console.error("Agent service is not running on port 8000.");
-       return next(new ApiError(503, "Agent sidecar service is unavailable."));
+      console.error("Agent service is not running on port 8000.");
+      return next(new ApiError(503, "Agent sidecar service is unavailable."));
     }
     console.error("AI Plan Proxy Error:", error.message);
     next(error);
@@ -107,6 +116,13 @@ const decodeBill = async (req, res, next) => {
  */
 const getUpgradeAdvice = async (req, res, next) => {
   try {
+    const userId = req.user?.id || req.user?._id || req.body?.user?.id || req.body?.user?.userId;
+    if (!req.body.appliances || req.body.appliances.length === 0) {
+      if (userId) {
+        req.body.appliances = await Appliance.find({ userId: userId }).lean();
+      }
+    }
+
     const result = await _proxyToSidecar("/upgrade-advice", req);
     return sendSuccess(res, 200, result.message || "Upgrade recommendations generated.", result.data);
   } catch (error) {
