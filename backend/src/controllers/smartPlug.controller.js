@@ -7,7 +7,8 @@ const Appliance          = require('../models/Appliance.model');
 const { sendSuccess }    = require('../utils/ApiResponse');
 const ApiError           = require('../utils/ApiError');
 const { asyncHandler }   = require('../middleware/errorHandler');
-const { readPlug }       = require('../services/SmartPlugSimulatorService');
+const SimulationEngine   = require('../services/SimulationEngine');
+const TuyaService        = require('../services/TuyaService');
 const { analyseReading } = require('../services/AnomalyDetectionService');
 const { v4: uuidv4 }     = require('uuid');
 
@@ -17,10 +18,13 @@ exports.registerPlug = asyncHandler(async (req, res) => {
     name,
     applianceId,
     vendor = 'simulator',
-    isSimulated = true,
+    isSimulated,
     location,
     baselineWattage,
     connectionConfig,
+    tuyaDeviceId,     // Convenience field; also stored in connectionConfig
+    // eslint-disable-next-line no-unused-vars
+    tuyaRegion,       // Reserved for future multi-region support ('EU'|'US'|'CN'|'IN')
   } = req.body;
 
   // Validate linked appliance belongs to user
@@ -30,25 +34,56 @@ exports.registerPlug = asyncHandler(async (req, res) => {
       userId: req.user._id,
       isActive: true,
     });
-    if (!appliance) {
-      throw new ApiError(404, 'Appliance not found or does not belong to you.');
-    }
+    if (!appliance) throw new ApiError(404, 'Appliance not found or does not belong to you.');
   }
 
-  // Generate a unique plugId for simulated plugs
-  const plugId = `${vendor}-${uuidv4().slice(0, 8)}`;
+  // ── Tuya-specific onboarding ──────────────────────────────────────────────
+  const isTuya       = vendor === 'tuya';
+  const deviceId     = tuyaDeviceId || connectionConfig?.cloudDeviceId || null;
+  const isRealDevice = isTuya && !!deviceId;
+
+  let tuyaDeviceName = name;
+  if (isRealDevice) {
+    // Validate device exists in Tuya account
+    const validation = await TuyaService.validateDevice(deviceId);
+    if (!validation.valid) {
+      throw new ApiError(
+        400,
+        `Tuya device not found: ${validation.error || 'Check your Device ID and make sure it is linked to your Tuya IoT project.'}`,
+      );
+    }
+    tuyaDeviceName = name || validation.name;
+  }
+
+  // Build plugId
+  const plugId = isRealDevice
+    ? `tuya-${deviceId.slice(0, 12)}`   // deterministic for real devices
+    : `${vendor}-${uuidv4().slice(0, 8)}`;
+
+  // Check for duplicate real Tuya device
+  if (isRealDevice) {
+    const exists = await SmartPlug.findOne({
+      userId:   req.user._id,
+      'connectionConfig.cloudDeviceId': deviceId,
+      isActive: true,
+    });
+    if (exists) throw new ApiError(409, 'This Tuya device is already registered.');
+  }
 
   const plug = await SmartPlug.create({
-    userId:         req.user._id,
-    applianceId:    applianceId || null,
+    userId:           req.user._id,
+    applianceId:      applianceId || null,
     plugId,
-    name,
+    name:             tuyaDeviceName,
     vendor,
-    isSimulated,
-    location:       location || null,
-    baselineWattage: baselineWattage || 0,
-    connectionConfig: connectionConfig || {},
-    isOnline:       isSimulated, // simulators are always "online"
+    isSimulated:      isSimulated !== undefined ? isSimulated : !isRealDevice,
+    location:         location || null,
+    baselineWattage:  baselineWattage || 0,
+    connectionConfig: {
+      ...(connectionConfig || {}),
+      cloudDeviceId: deviceId || connectionConfig?.cloudDeviceId || null,
+    },
+    isOnline: !isTuya, // simulators are always online; Tuya online status comes from first poll
   });
 
   sendSuccess(res, 201, 'Smart plug registered successfully.', plug);
@@ -123,7 +158,6 @@ exports.getTelemetry = asyncHandler(async (req, res) => {
 });
 
 // ─── POST /api/v1/smart-plugs/:id/simulate ───────────────────────────────────
-// Manually trigger one telemetry reading (useful for demo / testing anomaly alerts)
 exports.triggerReading = asyncHandler(async (req, res) => {
   const plug = await SmartPlug.findOne({
     _id:    req.params.id,
@@ -138,22 +172,61 @@ exports.triggerReading = asyncHandler(async (req, res) => {
 
   const { wattageOverride, forceSpike } = req.body;
 
-  const measurement = readPlug(plug, appliance, {
+  // Use SimulationEngine for manual triggers even for Tuya plugs (demo convenience)
+  const measurement = SimulationEngine.readPlug(plug, appliance, {
     wattageOverride: wattageOverride != null ? Number(wattageOverride) : undefined,
     forceSpike:      !!forceSpike,
   });
 
-  const result = await analyseReading({
-    plug,
-    appliance,
-    ...measurement,
-  });
+  const result = await analyseReading({ plug, appliance, ...measurement });
 
   sendSuccess(res, 200, 'Telemetry reading recorded.', {
     reading:      result.reading,
     isAnomaly:    result.isAnomaly,
     anomalyScore: result.anomalyScore,
     measurement,
+  });
+});
+
+// ─── GET /api/v1/smart-plugs/tuya-devices ────────────────────────────────────
+// List all Tuya devices in the configured account (for onboarding/discovery)
+exports.listTuyaDevices = asyncHandler(async (req, res) => {
+  const page     = parseInt(req.query.page)     || 1;
+  const pageSize = parseInt(req.query.pageSize) || 20;
+
+  const result = await TuyaService.listDevices({ page, pageSize });
+  sendSuccess(res, 200, 'Tuya devices fetched.', result);
+});
+
+// ─── POST /api/v1/smart-plugs/:id/control ────────────────────────────────────
+// Turn a real Tuya plug on or off
+exports.controlPlug = asyncHandler(async (req, res) => {
+  const plug = await SmartPlug.findOne({
+    _id:      req.params.id,
+    userId:   req.user._id,
+    isActive: true,
+  });
+  if (!plug) throw new ApiError(404, 'Smart plug not found.');
+
+  if (plug.vendor !== 'tuya' || plug.isSimulated) {
+    throw new ApiError(400, 'Control commands are only supported for real Tuya plugs.');
+  }
+
+  const deviceId = plug.connectionConfig?.cloudDeviceId;
+  if (!deviceId) throw new ApiError(400, 'Plug has no Tuya device ID configured.');
+
+  const { turnOn } = req.body;
+  if (turnOn === undefined) throw new ApiError(400, 'turnOn (boolean) is required.');
+
+  await TuyaService.setPlugState(deviceId, !!turnOn);
+
+  // Quick status snapshot after command
+  const metrics = await TuyaService.readPlugMetrics(deviceId);
+
+  sendSuccess(res, 200, `Plug turned ${turnOn ? 'on' : 'off'}.`, {
+    plugId:  plug.plugId,
+    isOn:    metrics.isOn,
+    wattage: metrics.wattage,
   });
 });
 

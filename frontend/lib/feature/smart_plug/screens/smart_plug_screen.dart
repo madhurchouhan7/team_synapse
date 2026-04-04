@@ -803,59 +803,126 @@ class _RegisterPlugSheet extends StatefulWidget {
   State<_RegisterPlugSheet> createState() => _RegisterPlugSheetState();
 }
 
-class _RegisterPlugSheetState extends State<_RegisterPlugSheet> {
+class _RegisterPlugSheetState extends State<_RegisterPlugSheet>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
+
+  // Simulator tab
   final _nameCtrl     = TextEditingController();
   final _locationCtrl = TextEditingController();
-  bool _isLoading     = false;
   int? _selectedPreset;
+
+  // Tuya tab
+  final _tuyaDeviceIdCtrl = TextEditingController();
+  final _tuyaNameCtrl     = TextEditingController();
+  final _tuyaLocationCtrl = TextEditingController();
+
+  bool _isLoading = false;
+  String? _errorMsg;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+  }
 
   @override
   void dispose() {
+    _tabCtrl.dispose();
     _nameCtrl.dispose();
     _locationCtrl.dispose();
+    _tuyaDeviceIdCtrl.dispose();
+    _tuyaNameCtrl.dispose();
+    _tuyaLocationCtrl.dispose();
     super.dispose();
   }
 
   void _applyPreset(int index) {
     final p = _presets[index];
     setState(() {
-      _selectedPreset = index;
+      _selectedPreset    = index;
       _nameCtrl.text     = p['name'] as String;
       _locationCtrl.text = p['location'] as String;
     });
   }
 
-  Future<void> _register() async {
+  // ── Register simulated plug ─────────────────────────────────────────────────
+  Future<void> _registerSimulated() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      setState(() => _errorMsg = 'Please enter a name or pick a preset.');
+      return;
+    }
+    setState(() { _isLoading = true; _errorMsg = null; });
 
-    setState(() => _isLoading = true);
     final wattage = _selectedPreset != null
         ? _presets[_selectedPreset!]['wattage'] as double
         : null;
 
-    final result = await widget.ref
-        .read(smartPlugListProvider.notifier)
-        .registerPlug(
-          name:            name,
-          location:        _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
-          isSimulated:     true,
-          vendor:          'simulator',
-          baselineWattage: wattage,
-        );
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      Navigator.of(context).pop();
-      if (result != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"${result.name}" registered! Readings will stream in ~5s.',
+    try {
+      final result = await widget.ref
+          .read(smartPlugListProvider.notifier)
+          .registerPlug(
+            name:            name,
+            location:
+                _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+            isSimulated:     true,
+            vendor:          'simulator',
+            baselineWattage: wattage,
+          );
+      if (mounted) {
+        Navigator.of(context).pop();
+        if (result != null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('"${result.name}" registered! Readings stream in ~5s.',
                 style: GoogleFonts.poppins()),
             backgroundColor: const Color(0xFF10B981),
-          ),
-        );
+          ));
+        }
       }
+    } catch (e) {
+      setState(() => _errorMsg = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Register real Tuya device ───────────────────────────────────────────────
+  Future<void> _registerTuya() async {
+    final deviceId = _tuyaDeviceIdCtrl.text.trim();
+    if (deviceId.isEmpty) {
+      setState(() => _errorMsg = 'Please enter the Tuya Device ID.');
+      return;
+    }
+    setState(() { _isLoading = true; _errorMsg = null; });
+
+    try {
+      final result = await widget.ref
+          .read(smartPlugListProvider.notifier)
+          .registerPlug(
+            name:        _tuyaNameCtrl.text.trim().isEmpty
+                ? 'Tuya Device' : _tuyaNameCtrl.text.trim(),
+            location:    _tuyaLocationCtrl.text.trim().isEmpty
+                ? null : _tuyaLocationCtrl.text.trim(),
+            isSimulated: false,
+            vendor:      'tuya',
+            tuyaDeviceId: deviceId,
+          );
+      if (mounted) {
+        Navigator.of(context).pop();
+        if (result != null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('"${result.name}" linked! Real-time data starts in 5s.',
+                style: GoogleFonts.poppins()),
+            backgroundColor: const Color(0xFF10B981),
+          ));
+        }
+      }
+    } catch (e) {
+      setState(() =>
+          _errorMsg = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -869,11 +936,11 @@ class _RegisterPlugSheetState extends State<_RegisterPlugSheet> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Handle
+            const SizedBox(height: 12),
             Center(
               child: Container(
                 width: 40, height: 4,
@@ -883,84 +950,243 @@ class _RegisterPlugSheetState extends State<_RegisterPlugSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Text('Add Simulated Appliance',
-                style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A))),
-            const SizedBox(height: 4),
-            Text('Choose a preset or enter custom details.',
-                style: GoogleFonts.poppins(
-                    fontSize: 12, color: const Color(0xFF64748B))),
             const SizedBox(height: 14),
 
-            // Preset chips
-            Wrap(
-              spacing: 8, runSpacing: 8,
-              children: List.generate(_presets.length, (i) {
-                final p        = _presets[i];
-                final selected = _selectedPreset == i;
-                return GestureDetector(
-                  onTap: () => _applyPreset(i),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFF1E60F2)
-                          : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      p['name'] as String,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: selected ? Colors.white : const Color(0xFF374151),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-
-            const SizedBox(height: 16),
-            _buildField(
-                controller: _nameCtrl,
-                label: 'Name',
-                hint: 'e.g. Living Room AC',
-                icon: Icons.label_outline),
-            const SizedBox(height: 12),
-            _buildField(
-                controller: _locationCtrl,
-                label: 'Location (optional)',
-                hint: 'e.g. Bedroom',
-                icon: Icons.location_on_outlined),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _register,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E60F2),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+            // Tab bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2)
-                    : Text('Register Plug',
-                        style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15)),
+                child: TabBar(
+                  controller: _tabCtrl,
+                  indicator: BoxDecoration(
+                    color: const Color(0xFF1E60F2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  labelStyle: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w700, fontSize: 13),
+                  unselectedLabelStyle:
+                      GoogleFonts.poppins(fontSize: 13),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: const Color(0xFF64748B),
+                  tabs: const [
+                    Tab(text: '🔵  Simulator'),
+                    Tab(text: '🟠  Tuya Device'),
+                  ],
+                  onTap: (_) => setState(() => _errorMsg = null),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Error
+            if (_errorMsg != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: Color(0xFFEF4444), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(_errorMsg!,
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, color: const Color(0xFFDC2626))),
+                    ),
+                  ]),
+                ),
+              ),
+
+            // Tab views
+            SizedBox(
+              height: 380,
+              child: TabBarView(
+                controller: _tabCtrl,
+                children: [
+                  _simulatorTab(),
+                  _tuyaTab(),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Simulator tab ─────────────────────────────────────────────────────────
+  Widget _simulatorTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Choose a preset or enter custom details.',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: const Color(0xFF64748B))),
+          const SizedBox(height: 12),
+
+          // Preset chips
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: List.generate(_presets.length, (i) {
+              final p        = _presets[i];
+              final selected = _selectedPreset == i;
+              return GestureDetector(
+                onTap: () => _applyPreset(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0xFF1E60F2)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(p['name'] as String,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : const Color(0xFF374151),
+                      )),
+                ),
+              );
+            }),
+          ),
+
+          const SizedBox(height: 14),
+          _buildField(controller: _nameCtrl, label: 'Name',
+              hint: 'e.g. Living Room AC', icon: Icons.label_outline),
+          const SizedBox(height: 10),
+          _buildField(controller: _locationCtrl, label: 'Location (optional)',
+              hint: 'e.g. Bedroom', icon: Icons.location_on_outlined),
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _registerSimulated,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E60F2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text('Register Plug',
+                      style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Tuya tab ──────────────────────────────────────────────────────────────
+  Widget _tuyaTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Setup guide
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFED7AA)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Text('🔧', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 6),
+                  Text('Tuya Setup Guide',
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: const Color(0xFF92400E))),
+                ]),
+                const SizedBox(height: 6),
+                ...[
+                  '1. Open the Tuya / Smart Life app on your phone',
+                  '2. Add your smart plug in the app',
+                  '3. Go to iot.tuya.com → Cloud → Your Project → Devices',
+                  '4. Copy the Device ID from the device list',
+                  '5. Paste it below and tap Link Device',
+                ].map((step) => Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(step,
+                      style: GoogleFonts.poppins(
+                          fontSize: 11, color: const Color(0xFF78350F))),
+                )),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          _buildField(
+              controller: _tuyaDeviceIdCtrl,
+              label:       'Tuya Device ID *',
+              hint:        'e.g. eb3b5bac7b12345678',
+              icon:        Icons.qr_code_2_rounded),
+          const SizedBox(height: 10),
+          _buildField(
+              controller: _tuyaNameCtrl,
+              label:       'Display Name (optional)',
+              hint:        'e.g. Kitchen Plug',
+              icon:        Icons.label_outline),
+          const SizedBox(height: 10),
+          _buildField(
+              controller: _tuyaLocationCtrl,
+              label:       'Location (optional)',
+              hint:        'e.g. Kitchen',
+              icon:        Icons.location_on_outlined),
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity, height: 50,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _registerTuya,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF97316),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.link_rounded,
+                            color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Link Tuya Device',
+                            style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15)),
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -988,8 +1214,8 @@ class _RegisterPlugSheetState extends State<_RegisterPlugSheet> {
             prefixIcon: Icon(icon, color: const Color(0xFF6B7280), size: 18),
             filled:     true,
             fillColor:  const Color(0xFFF9FAFB),
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 13),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
@@ -998,8 +1224,8 @@ class _RegisterPlugSheetState extends State<_RegisterPlugSheet> {
                 borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                    color: Color(0xFF1E60F2), width: 1.5)),
+                borderSide:
+                    const BorderSide(color: Color(0xFF1E60F2), width: 1.5)),
           ),
           style: GoogleFonts.poppins(fontSize: 13),
         ),
@@ -1007,3 +1233,5 @@ class _RegisterPlugSheetState extends State<_RegisterPlugSheet> {
     );
   }
 }
+
+

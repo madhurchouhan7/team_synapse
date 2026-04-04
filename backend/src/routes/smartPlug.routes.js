@@ -47,4 +47,12 @@ router.post(
   smartPlugController.triggerReading,
 );
 
+// ─── Tuya-specific ────────────────────────────────────────────────────────────
+
+// GET  /api/v1/smart-plugs/tuya-devices — list all Tuya devices in the account
+router.get('/tuya-devices', smartPlugController.listTuyaDevices);
+
+// POST /api/v1/smart-plugs/:id/control — turn real Tuya plug on/off
+router.post('/:id/control', rateLimiters.strict, smartPlugController.controlPlug);
+
 module.exports = router;
