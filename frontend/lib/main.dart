@@ -36,9 +36,13 @@ void main() async {
   await HeatmapLocalService.instance.init();
 
   Future<void> logFCMToken() async {
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token != null) {
-      log('FCM Token: $token');
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        log('FCM Token: $token');
+      }
+    } catch (e) {
+      log('Could not get FCM token for logging: $e');
     }
   }
 

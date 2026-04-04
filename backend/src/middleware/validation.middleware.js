@@ -61,7 +61,7 @@ const applianceMutableFieldsSchema = {
     .int()
     .min(1, "Count must be at least 1")
     .max(100, "Count seems too high"),
-  selectedDropdowns: z.record(z.string()),
+  selectedDropdowns: z.record(z.string(), z.string()),
   svgPath: z.string().trim().min(1, "SVG path is required"),
 };
 
@@ -81,8 +81,27 @@ const schemas = {
         .trim()
         .url("Avatar URL must be a valid HTTP/HTTPS URL")
         .optional(),
-    })
-    .strict(),
+      address: z.object({
+        state: z.string().optional(),
+        city: z.string().optional(),
+        discom: z.string().optional(),
+        lat: z.number().optional(),
+        lng: z.number().optional()
+      }).optional(),
+      household: z.object({
+        peopleCount: commonSchemas.positiveNumber.optional(),
+        familyType: z.enum(["Just Me", "Small", "Large", "Joint"]).optional(),
+        houseType: z.enum(["Apartment", "Bungalow", "Independent"]).optional(),
+      }).optional(),
+      planPreferences: z.object({
+        mainGoals: z.array(z.string()).optional(),
+        focusArea: z.string().optional()
+      }).optional(),
+      onboardingCompleted: z.boolean().optional(),
+      activePlan: z.any().optional(),
+      streak: z.number().optional(),
+      lastCheckIn: z.string().optional(),
+    }),
 
   updateAddress: z.object({
     state: z.string().min(1, "State is required").optional(),
@@ -109,7 +128,7 @@ const schemas = {
           usageHours: z.number().min(0).max(24),
           usageLevel: z.enum(["Low", "Medium", "High"]),
           count: commonSchemas.positiveNumber,
-          selectedDropdowns: z.record(z.string()),
+          selectedDropdowns: z.record(z.string(), z.string()),
           svgPath: z.string().optional(),
         }),
       )

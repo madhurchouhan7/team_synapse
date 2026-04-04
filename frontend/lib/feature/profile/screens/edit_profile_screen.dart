@@ -138,7 +138,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               foregroundImage: draft.avatarUrl.isNotEmpty
                                   ? NetworkImage(draft.avatarUrl)
                                   : null,
-                              onForegroundImageError: (_, __) {},
+                              onForegroundImageError: draft.avatarUrl.isNotEmpty
+                                  ? (_, __) {}
+                                  : null,
                               child: const Icon(
                                 Icons.person,
                                 color: Color(0xFF94A3B8),

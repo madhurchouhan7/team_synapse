@@ -275,7 +275,7 @@ UserSchema.virtual("isSubscriptionActive").get(function () {
 });
 
 // Pre-save middleware
-UserSchema.pre("save", function (next) {
+UserSchema.pre("save", function () {
   // Update last login time if modified
   if (this.isModified("lastLoginAt") && this.lastLoginAt) {
     this.lastLoginAt = new Date();
@@ -285,8 +285,6 @@ UserSchema.pre("save", function (next) {
   if (this.isModified("deviceTokens")) {
     this.deviceTokens = this.deviceTokens.filter((token) => token.isActive);
   }
-
-  next();
 });
 
 // Static methods

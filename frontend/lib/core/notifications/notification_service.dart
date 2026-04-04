@@ -47,9 +47,27 @@ class NotificationService {
   }
 
   Future<void> _syncTokenWithBackend() async {
-    final token = await _messaging.getToken();
-    if (token == null) return;
-    await _sendTokenToBackend(token);
+    try {
+      if (Platform.isIOS) {
+        // Wait for APNs token to be available before fetching FCM token.
+        String? apnsToken = await _messaging.getAPNSToken();
+        if (apnsToken == null) {
+          // Can take a brief moment on fresh starts
+          await Future.delayed(const Duration(seconds: 3));
+          apnsToken = await _messaging.getAPNSToken();
+        }
+        if (apnsToken == null) {
+          log('APNS token is not available (this is normal on iOS simulators). Skipping FCM token registration.');
+          return;
+        }
+      }
+
+      final token = await _messaging.getToken();
+      if (token == null) return;
+      await _sendTokenToBackend(token);
+    } catch (e) {
+      log('Error getting FCM token: $e');
+    }
   }
 
   Future<void> _sendTokenToBackend(String token) async {

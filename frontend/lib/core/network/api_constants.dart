@@ -22,7 +22,7 @@ class ApiConstants {
   // Use 10.0.2.2 if testing on Android Emulator
   // Use your computer's IP (e.g., 192.168.1.X) if testing on a physical phone on the same WiFi
   //static const String _developmentUrl = 'http://10.0.2.2:5000';
-  static const String _developmentUrl = 'http://10.191.204.93:5000';
+  static const String _developmentUrl = 'http://192.168.52.219:5000';
 
   //  Automatically pick the base URL based on build mode!
   static String get _baseUrl {

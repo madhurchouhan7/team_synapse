@@ -77,21 +77,23 @@ class DashboardAppBar extends StatelessWidget {
         // ── Profile Icon ──────────────────────────────────────
         GestureDetector(
           onTap: onProfileTap,
-          child: CircleAvatar(
-            radius: 22,
-            backgroundColor: const Color(0xFF1E60F2).withOpacity(0.1),
-            foregroundImage:
-                user?.photoUrl != null && user!.photoUrl!.isNotEmpty
-                ? NetworkImage(user!.photoUrl!)
-                : null,
-            onForegroundImageError: (_, __) {},
-            child: Text(
-              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF1E60F2),
-              ),
-            ),
+          child: Builder(
+            builder: (context) {
+              final hasPhoto = user?.photoUrl != null && user!.photoUrl!.isNotEmpty;
+              return CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFF1E60F2).withOpacity(0.1),
+                foregroundImage: hasPhoto ? NetworkImage(user!.photoUrl!) : null,
+                onForegroundImageError: hasPhoto ? (_, __) {} : null,
+                child: Text(
+                  displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1E60F2),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],

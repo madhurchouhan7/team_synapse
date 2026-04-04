@@ -40,7 +40,10 @@ class ProfileHeader extends ConsumerWidget {
                     foregroundImage: photoUrl != null && photoUrl.isNotEmpty
                         ? NetworkImage(photoUrl)
                         : null,
-                    onForegroundImageError: (_, __) {},
+                    onForegroundImageError:
+                        photoUrl != null && photoUrl.isNotEmpty
+                            ? (_, __) {}
+                            : null,
                     child: Text(
                       displayName.isNotEmpty
                           ? displayName[0].toUpperCase()

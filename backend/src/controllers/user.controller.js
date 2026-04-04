@@ -28,14 +28,44 @@ exports.getMe = asyncHandler(async (req, res, _next) => {
 
 // ─── PUT /api/v1/users/me ─────────────────────────────────────────────────────
 exports.updateMe = asyncHandler(async (req, res, _next) => {
-  const { name, avatarUrl } = req.body;
+  const body = req.body;
+  let cacheInvalidated = false;
 
-  // Update profile fields
-  if (name !== undefined || avatarUrl !== undefined) {
-    await userService.updateProfile(req.user._id, { name, avatarUrl });
-    await cacheService.del(
-      cacheService.generateUserKey(req.user._id, "profile"),
-    );
+  // Household details
+  if (body.household) {
+    await userService.updateHousehold(req.user._id, body.household);
+    cacheInvalidated = true;
+  }
+
+  // Plan preferences
+  if (body.planPreferences) {
+    await userService.updatePreferences(req.user._id, body.planPreferences);
+    cacheInvalidated = true;
+  }
+
+  // Active Plan
+  if (body.activePlan !== undefined) {
+    await userService.updateActivePlan(req.user._id, body.activePlan);
+    cacheInvalidated = true;
+    await cacheService.del(cacheService.generateUserKey(req.user._id, "active-plan"));
+  }
+
+  // legacy streak updates
+  if (body.streak !== undefined && body.lastCheckIn !== undefined) {
+    await userService.updateStreak(req.user._id, body.streak, new Date(body.lastCheckIn));
+    cacheInvalidated = true;
+  }
+
+  // Profile fields (address, name, avatarUrl, onboardingCompleted)
+  const profileFields = ['name', 'avatarUrl', 'address', 'monthlyBudget', 'currency', 'onboardingCompleted'];
+  const hasProfileField = profileFields.some(field => body[field] !== undefined);
+  if (hasProfileField) {
+    await userService.updateProfile(req.user._id, body);
+    cacheInvalidated = true;
+  }
+
+  if (cacheInvalidated) {
+    await cacheService.del(cacheService.generateUserKey(req.user._id, "profile"));
   }
 
   const userProfile = await userService.getUserProfile(req.user._id);
