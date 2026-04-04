@@ -11,6 +11,7 @@ const SimulationEngine   = require('../services/SimulationEngine');
 const TuyaService        = require('../services/TuyaService');
 const { analyseReading } = require('../services/AnomalyDetectionService');
 const { v4: uuidv4 }     = require('uuid');
+const { broadcastReading } = require('../websocket/wsServer');
 
 // ─── POST /api/v1/smart-plugs ────────────────────────────────────────────────
 exports.registerPlug = asyncHandler(async (req, res) => {
@@ -179,6 +180,14 @@ exports.triggerReading = asyncHandler(async (req, res) => {
   });
 
   const result = await analyseReading({ plug, appliance, ...measurement });
+  
+  // Real-time broadcast so the dashboard/banner reacts instantly
+  broadcastReading(
+    result.reading,
+    plug.name,
+    appliance?.title || plug.name,
+    { deviceState: measurement.state, isSpike: measurement.isSpike }
+  );
 
   sendSuccess(res, 200, 'Telemetry reading recorded.', {
     reading:      result.reading,

@@ -18,11 +18,16 @@ import 'package:watt_sense/feature/profile/widgets/profile_menu_section.dart';
 import 'package:watt_sense/feature/profile/widgets/profile_stats_card.dart';
 import 'package:watt_sense/feature/solar/screens/solar_calculator_screen.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  @override
+  Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileProvider);
 
     return Scaffold(
@@ -181,7 +186,7 @@ class ProfileScreen extends ConsumerWidget {
               const SizedBox(height: 32),
 
               LogoutButton(
-                onPressed: () => _showLogoutDialog(context, ref),
+                onPressed: () => _showLogoutDialog(context),
               ).animate().fade(delay: 600.ms).slideY(begin: 0.1, end: 0),
 
               const SizedBox(height: 24),
@@ -204,7 +209,7 @@ class ProfileScreen extends ConsumerWidget {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  Future<void> _showLogoutDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showLogoutDialog(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
@@ -279,10 +284,8 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       await ref.read(authNotifierProvider.notifier).signOut();
-      // AppRouter is watching authStateProvider — it will automatically
-      // redirect to WelcomeScreen once the stream emits null.
     }
   }
 }

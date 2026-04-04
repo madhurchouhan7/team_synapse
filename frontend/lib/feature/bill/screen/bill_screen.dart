@@ -12,11 +12,16 @@ import 'package:watt_sense/feature/bill/widgets/current_cycle_card.dart';
 
 import '../providers/fetch_bill_provider.dart';
 
-class BillScreen extends ConsumerWidget {
+class BillScreen extends ConsumerStatefulWidget {
   const BillScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BillScreen> createState() => _BillScreenState();
+}
+
+class _BillScreenState extends ConsumerState<BillScreen> {
+  @override
+  Widget build(BuildContext context) {
     final savedBill = ref.watch(savedBillProvider);
 
     String amountStr = '0';
@@ -170,6 +175,7 @@ class BillScreen extends ConsumerWidget {
                                   },
                                 );
 
+                                if (!mounted) return;
                                 if (confirm == true) {
                                   ref
                                       .read(savedBillProvider.notifier)

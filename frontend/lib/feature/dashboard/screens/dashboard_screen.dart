@@ -128,22 +128,29 @@ class _EmptyView extends ConsumerWidget {
 }
 
 // ─── Data View (bills exist) ──────────────────────────────────────────────────
-class _DataView extends ConsumerWidget {
+class _DataView extends ConsumerStatefulWidget {
   final String displayName;
   final UserModel? user;
   const _DataView({required this.displayName, this.user});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DataView> createState() => _DataViewState();
+}
+
+class _DataViewState extends ConsumerState<_DataView> {
+  @override
+  Widget build(BuildContext context) {
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: () async {
           await ref.read(authRepositoryProvider).refreshUserData();
+          if (!mounted) return;
           ref.invalidate(authStateProvider);
           final now = DateTime.now();
           await ref
               .read(heatmapNotifierProvider.notifier)
               .refreshFromServer(year: now.year, month: now.month);
+          if (!mounted) return;
           ref.read(smartPlugSummaryProvider.notifier).refresh();
         },
         child: SingleChildScrollView(
@@ -153,8 +160,8 @@ class _DataView extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DashboardAppBar(
-                displayName: displayName,
-                user: user,
+                displayName: widget.displayName,
+                user: widget.user,
                 onNotificationTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -185,27 +192,27 @@ class _DataView extends ConsumerWidget {
               ),
 
               const SizedBox(height: 16),
-              _buildStatCards(ref),
+              _buildStatCards(),
 
               const SizedBox(height: 28),
               _buildSectionTitle('Active Plan', showIndicator: true),
               const SizedBox(height: 16),
-              _buildActivePlanCard(context, ref, user),
+              _buildActivePlanCard(context, widget.user),
               const SizedBox(height: 28),
               const StreakCard(),
               const SizedBox(height: 28),
               _buildSectionTitle('Action Items'),
               const SizedBox(height: 16),
-              _buildActionItems(user),
+              _buildActionItems(widget.user),
               const SizedBox(height: 28),
 
               // ── Smart Plugs live section ────────────────────────────
-              _buildSmartPlugSection(context, ref),
+              _buildSmartPlugSection(context),
 
               const SizedBox(height: 28),
               _buildSectionTitleWithAction('Recent Activity', 'View All'),
               const SizedBox(height: 16),
-              _buildRecentActivity(ref),
+              _buildRecentActivity(),
               const SizedBox(height: 24),
             ],
           ),
@@ -214,7 +221,7 @@ class _DataView extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatCards(WidgetRef ref) {
+  Widget _buildStatCards() {
     final savedBill = ref.watch(savedBillProvider);
     final currentBillAmount = savedBill?['amountExact'];
     String currentBillStr;
@@ -334,7 +341,6 @@ class _DataView extends ConsumerWidget {
 
   Widget _buildActivePlanCard(
     BuildContext context,
-    WidgetRef ref,
     UserModel? user,
   ) {
     if (user?.activePlan == null) {
@@ -725,7 +731,7 @@ class _DataView extends ConsumerWidget {
     );
   }
 
-  Widget _buildSmartPlugSection(BuildContext context, WidgetRef ref) {
+  Widget _buildSmartPlugSection(BuildContext context) {
     final wsState    = ref.watch(wsTelemetryProvider);
     final plugsAsync = ref.watch(smartPlugListProvider);
     final liveData   = wsState.liveData;
@@ -964,7 +970,7 @@ class _DataView extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentActivity(WidgetRef ref) {
+  Widget _buildRecentActivity() {
 
     final savedBill = ref.watch(savedBillProvider);
     final activities = <Map<String, dynamic>>[];

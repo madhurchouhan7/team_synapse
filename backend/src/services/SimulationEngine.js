@@ -513,8 +513,19 @@ function readPlug(plug, appliance = null, opts = {}) {
   }
 
   // Force spike
-  if (opts.forceSpike && s.state !== 'off') {
-    opts.wattageOverride = (_computeWattage(s, model, _scenario, {}) * _rand(2.5, 4.0));
+  if (opts.forceSpike) {
+    let baseWattage = _computeWattage(s, model, _scenario, {});
+    
+    // If appliance is currently OFF, we simulate as if it just spiked from an active state
+    if (baseWattage < 5) {
+      const activeState = model.states.find(st => !['off', 'standby', 'sleep', 'done'].includes(st)) || model.states[0];
+      const pw = model.power[activeState];
+      baseWattage = (pw?.base || 500) * s.ageOffset;
+    }
+    
+    opts.wattageOverride = baseWattage * _rand(2.5, 5.0);
+    // Ensure the spike is enough to trigger the 15W absolute delta rule in AnomalyDetectionService
+    if (opts.wattageOverride < 40) opts.wattageOverride = 150 + _rand(0, 50);
   }
 
   // Compute values

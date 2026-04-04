@@ -49,5 +49,15 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>WattSense needs access to your location to find nearby solar installation partners and local energy grid data.</string>
+		<key>NSLocationAlwaysUsageDescription</key>
+		<string>WattSense needs access to your location to find nearby solar installation partners and local energy grid data.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>WattSense needs access to your camera to scan electricity bills and appliances for verification.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>WattSense needs access to your gallery to upload saved electricity bills for processing.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>WattSense needs access to your gallery to save processed reports and bill summaries.</string>
 	</dict>
 </plist>

@@ -49,23 +49,28 @@ class _AnomalyAlertBannerState extends ConsumerState<AnomalyAlertBanner>
   Widget build(BuildContext context) {
     final wsState = ref.watch(wsTelemetryProvider);
 
+    // Determine if we have live or REST-based anomaly
+    final hasLiveAnomaly = wsState.hasAnomalies;
+    final anomalousPlugs = wsState.anomalousPlugs;
+
     // Re-show banner when a new WS anomaly event arrives
     final anomalyEvent = wsState.latestAnomaly;
     final anomalyKey   = anomalyEvent != null
         ? '${anomalyEvent.data['plugId']}_${anomalyEvent.data['timestamp']}'
         : null;
 
-    if (anomalyKey != null && anomalyKey != _lastAnomalyType) {
-      _lastAnomalyType = anomalyKey;
+    // Compare set of live anomalous plugs to detect new culprits
+    final currentAnomalousIds = anomalousPlugs.map((p) => p.plugId).join(',');
+    final hasNewLiveAnomaly = currentAnomalousIds.isNotEmpty && 
+                             !currentAnomalousIds.split(',').every((id) => _lastAnomalyType?.contains(id) ?? false);
+
+    if ((anomalyKey != null && anomalyKey != _lastAnomalyType) || hasNewLiveAnomaly) {
+      _lastAnomalyType = anomalyKey ?? currentAnomalousIds;
       _dismissed       = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _ctrl.forward();
       });
     }
-
-    // Determine if we have live or REST-based anomaly
-    final hasLiveAnomaly = wsState.hasAnomalies;
-    final anomalousPlugs = wsState.anomalousPlugs;
 
     // Only show if there is an ACTUAL anomaly AND not dismissed
     if (_dismissed || (!hasLiveAnomaly && anomalyEvent == null)) {
