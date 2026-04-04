@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const { initFirebase } = require('../config/firebase');
 const connectDB = require('../config/db');
 const { startTelemetryPoller } = require('./jobs/telemetryPoller');
+const { attachWsServer }       = require('./websocket/wsServer');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { sanitizeInput, preventNoSQLInjection, contentSecurityPolicy } = require('./middleware/security.middleware');
 const { rateLimiters, rateLimitStatus } = require('./middleware/rateLimit.middleware');
@@ -27,8 +28,8 @@ initFirebase();
 connectDB();
 
 // ─── Start background jobs ────────────────────────────────────────────────────
-// Telemetry poller: reads smart plug data every 30s and runs anomaly detection
-startTelemetryPoller();
+// Note: Telemetry poller is started AFTER server listen (see bottom of file)
+// so the WebSocket server is attached first.
 
 const app = express();
 
@@ -129,12 +130,19 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-// ─── Start Server ─────────────────────────────────────────────────────
+// ─── Start Server + WebSocket ─────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀  WattWise API running on port ${PORT} [${process.env.NODE_ENV}]`);
     console.log(`📊 Health checks available at http://localhost:${PORT}/health`);
     console.log(`📚 API documentation at http://localhost:${PORT}/api/v1`);
+    console.log(`🔌 WebSocket stream at ws://localhost:${PORT}/ws`);
 });
+
+// Attach WebSocket server to the same HTTP server (same port)
+attachWsServer(httpServer);
+
+// Start telemetry poller AFTER server is ready
+startTelemetryPoller();
 
 module.exports = app; // for testing

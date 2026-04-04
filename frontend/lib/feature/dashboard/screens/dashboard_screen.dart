@@ -16,6 +16,7 @@ import 'package:watt_sense/feature/bill/screen/add_bill_screen.dart';
 import 'package:watt_sense/feature/notifications/screens/notification_list_screen.dart';
 import 'package:watt_sense/feature/insights/providers/heatmap_provider.dart';
 import 'package:watt_sense/feature/smart_plug/providers/smart_plug_provider.dart';
+import 'package:watt_sense/feature/smart_plug/providers/ws_telemetry_provider.dart';
 import 'package:watt_sense/feature/smart_plug/screens/smart_plug_screen.dart';
 import 'package:watt_sense/feature/smart_plug/widgets/anomaly_alert_banner.dart';
 
@@ -725,105 +726,119 @@ class _DataView extends ConsumerWidget {
   }
 
   Widget _buildSmartPlugSection(BuildContext context, WidgetRef ref) {
-    final summaryAsync = ref.watch(smartPlugSummaryProvider);
+    final wsState = ref.watch(wsTelemetryProvider);
+    final liveData = wsState.liveData;
 
-    return summaryAsync.maybeWhen(
-      data: (summary) {
-        if (summary.totalPlugs == 0) return const SizedBox.shrink();
+    if (liveData.isEmpty) {
+      // Fall back to a "register plug" nudge
+      return const SizedBox.shrink();
+    }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final totalW   = wsState.totalLiveWattage;
+    final anomalies = wsState.anomalousPlugs.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildSectionTitle('Smart Plugs', showIndicator: summary.hasAnomalies),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => const SmartPlugScreen()),
-                  ),
-                  child: Text(
-                    'Manage',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: const Color(0xFF1E60F2),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+            _buildSectionTitle('Smart Plugs', showIndicator: anomalies > 0),
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
+              ),
+              child: Text('Manage',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: const Color(0xFF1E60F2),
+                    fontWeight: FontWeight.w600,
+                  )),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Live wattage card
+        GestureDetector(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E60F2), Color(0xFF144CC7)],
+                begin: Alignment.topLeft,
+                end:   Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1E60F2).withOpacity(0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            // Live wattage total card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E60F2), Color(0xFF144CC7)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.electrical_services_rounded,
-                      color: Colors.white, size: 28),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${summary.liveWattage.toStringAsFixed(0)} W',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        '${summary.onlinePlugs}/${summary.totalPlugs} plugs online',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  if (summary.anomalyPlugs > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: Colors.white, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${summary.anomalyPlugs} Alert${summary.anomalyPlugs > 1 ? 's' : ''}',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+            child: Row(
+              children: [
+                const Icon(Icons.electrical_services_rounded,
+                    color: Colors.white, size: 28),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${totalW.toStringAsFixed(1)} W',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                ],
-              ),
+                    Text(
+                      '${liveData.length} plug${liveData.length > 1 ? 's' : ''} · Live',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                if (anomalies > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: Colors.white, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$anomalies Alert${anomalies > 1 ? 's' : ''}',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  const Icon(Icons.chevron_right_rounded,
+                      color: Colors.white, size: 22),
+              ],
             ),
-          ],
-        );
-      },
-      orElse: () => const SizedBox.shrink(),
+          ),
+        ),
+      ],
     );
   }
 

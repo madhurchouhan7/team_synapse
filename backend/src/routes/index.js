@@ -16,6 +16,7 @@ const contentRoutes = require("./content.routes");
 const solarRoutes = require("./solar.routes");
 const supportRoutes = require("./support.routes");
 const smartPlugRoutes = require("./smartPlug.routes");
+const simulationRoutes = require("./simulation.routes");
 
 // Health / Ping Route
 router.get("/ping", (req, res) => {
@@ -38,5 +39,6 @@ router.use("/content", contentRoutes);
 router.use("/solar", solarRoutes);
 router.use("/support", supportRoutes);
 router.use("/smart-plugs", smartPlugRoutes);
+router.use("/simulation", simulationRoutes);
 
 module.exports = router;

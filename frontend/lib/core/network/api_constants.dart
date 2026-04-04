@@ -63,5 +63,23 @@ class ApiConstants {
   static String smartPlugTelemetry(String id)      => '/smart-plugs/$id/telemetry';
   static String smartPlugSimulate(String id)       => '/smart-plugs/$id/simulate';
 
+  // ── Simulation Control Routes ─────────────────────────────────────────────
+  static const String simulationStatus    = '/simulation/status';
+  static const String simulationScenarios = '/simulation/scenarios';
+  static const String simulationScenario  = '/simulation/scenario';
+  static String simulationTrigger(String id) => '/simulation/plug/$id/trigger';
+  static String simulationState(String id)   => '/simulation/plug/$id/state';
+  static String simulationReset(String id)   => '/simulation/plug/$id/reset';
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  /// Derive WS URL from base URL by replacing http://host/api with ws://host/ws
+  static String wsUrl(String userId) {
+    final host = baseUrl
+        .replaceFirst('https://', 'wss://')
+        .replaceFirst('http://', 'ws://')
+        .replaceAll(RegExp(r'/api.*$'), '');
+    return '$host/ws?userId=$userId';
+  }
+
   // ── (Add more as you build features) ─────────────────────────────────────
 }
