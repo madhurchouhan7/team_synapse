@@ -56,7 +56,7 @@ def _build_default_strategies() -> list[dict]:
 
 # Initialize LangChain OpenAI client targeting OpenRouter API (Grok)
 llm = ChatOpenAI(
-    model="x-ai/grok-4.1-fast",
+    model="x-ai/grok-3-mini-beta",
     api_key=os.environ.get("OPENROUTER_API_KEY", "dummy"),
     base_url="https://openrouter.ai/api/v1",
     temperature=0.2,
@@ -91,6 +91,7 @@ async def run_strategist(state: dict[str, Any]) -> dict[str, Any]:
 
         context_string = (
             f"\nCurrent Weather Context: {state.get('weatherContext', 'Unknown/Average Weather')}\n\n"
+            f"Past Memory Context (from Vector DB):\n{json.dumps(state.get('memoryContext', []), indent=2, default=str)}\n\n"
             f"User Appliances/Data:\n{json.dumps(appliances_data, indent=2, default=str)}\n\n"
             f"Identified Anomalies from Analyst:\n{anomalies_str}\n"
         )
@@ -99,15 +100,10 @@ async def run_strategist(state: dict[str, Any]) -> dict[str, Any]:
         if os.environ.get("OPENROUTER_API_KEY"):
             response = await llm.ainvoke([system_message, user_message])
 
-            # Basic JSON extraction and sanitization
-            raw_json_str = response.content
-            if raw_json_str.startswith("```json"):
-                raw_json_str = re.sub(r"```json\n?", "", raw_json_str)
-                raw_json_str = re.sub(r"```\n?", "", raw_json_str)
-            elif raw_json_str.startswith("```"):
-                raw_json_str = re.sub(r"```\n?", "", raw_json_str)
+            # Robust JSON extraction — strip any markdown fencing
+            raw_json_str = re.sub(r"```(?:json)?\n?", "", response.content).strip()
 
-            parsed_strategies = json.loads(raw_json_str.strip())
+            parsed_strategies = json.loads(raw_json_str)
             print(
                 f"--> [Node] Strategist completed. "
                 f"Generated {len(parsed_strategies)} strategies."

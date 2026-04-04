@@ -16,7 +16,7 @@ from .shared.phase4_contracts import normalize_strategies
 
 # Initialize LangChain Gemini Client
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     google_api_key=os.environ.get("GEMINI_API_KEY", "dummy"),
     temperature=0.4,
 )
@@ -36,6 +36,7 @@ async def run_copywriter(state: dict[str, Any]) -> dict[str, Any]:
         # Construct the prompt context
         context_string = (
             f"\nCurrent Weather Context: {state.get('weatherContext', 'Unknown')}\n"
+            f"Past Memory Context (from Vector DB):\n{json.dumps(state.get('memoryContext', []), indent=2, default=str)}\n"
             f"User Provided Data: {json.dumps(state.get('userData', {}), indent=2, default=str)}\n"
             f"Anomalies Detected (Analyst): {json.dumps(state.get('anomalies', []), indent=2, default=str)}\n"
             f"Strategies Generated (Strategist): {json.dumps(state.get('strategies', []), indent=2, default=str)}\n"
@@ -45,15 +46,10 @@ async def run_copywriter(state: dict[str, Any]) -> dict[str, Any]:
         if os.environ.get("GEMINI_API_KEY"):
             response = await llm.ainvoke([system_message, user_message])
 
-            # Basic JSON extraction and sanitization
-            raw_json_str = response.content
-            if raw_json_str.startswith("```json"):
-                raw_json_str = re.sub(r"```json\n?", "", raw_json_str)
-                raw_json_str = re.sub(r"```\n?", "", raw_json_str)
-            elif raw_json_str.startswith("```"):
-                raw_json_str = re.sub(r"```\n?", "", raw_json_str)
+            # Robust JSON extraction — strip any markdown fencing
+            raw_json_str = re.sub(r"```(?:json)?\n?", "", response.content).strip()
 
-            parsed_final_plan = json.loads(raw_json_str.strip())
+            parsed_final_plan = json.loads(raw_json_str)
             print("--> [Node] Copywriter completed successfully.")
 
             return {"finalPlan": parsed_final_plan}

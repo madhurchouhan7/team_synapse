@@ -34,6 +34,11 @@ from .orchestrators.mode_resolver import resolve_orchestration_mode
 from .orchestrators.response_envelope import build_plan_response_envelope
 from .exceptions import ApiError
 
+# New agents
+from ..bill_decoder.index import bill_decoder_app
+from ..upgrade_advisor.index import upgrade_advisor_app
+
+
 # ── Logging ────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -53,8 +58,8 @@ async def lifespan(app: FastAPI):
 # ── FastAPI App ────────────────────────────────────────────────────────
 app = FastAPI(
     title="WattWise LangGraph Agent Service",
-    description="Multi-agent efficiency plan workflow powered by LangGraph",
-    version="2.0.0",
+    description="Multi-agent workflow service: Efficiency Plan, Bill Decoder, Upgrade Advisor",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -76,6 +81,18 @@ class UserData(BaseModel):
 class PlanResponse(BaseModel):
     success: bool = True
     message: str = "Plan generated successfully."
+    data: Optional[dict[str, Any]] = None
+
+
+class BillDecodeResponse(BaseModel):
+    success: bool = True
+    message: str = "Bill decoded successfully."
+    data: Optional[dict[str, Any]] = None
+
+
+class UpgradeResponse(BaseModel):
+    success: bool = True
+    message: str = "Upgrade recommendations generated."
     data: Optional[dict[str, Any]] = None
 
 
@@ -347,6 +364,118 @@ async def generate_plan(
         raise HTTPException(status_code=500, detail=str(error))
 
 
+# ── Bill Decoder Endpoint ─────────────────────────────────────────────
+@app.post("/decode-bill", response_model=BillDecodeResponse)
+async def decode_bill(
+    request: Request,
+    x_user_id: Optional[str] = Header(None),
+):
+    """
+    Decode an OCR-scanned electricity bill via the Bill Decoder multi-agent workflow.
+
+    Expected body:
+      {
+        "rawBillText": "...",         // OCR text from Flutter (optional if imageBase64 set)
+        "imageBase64": "...",         // Base64 image (optional)
+        "existingBillData": { ... }   // Pre-filled fields from frontend (optional)
+      }
+    """
+    start_time = time.time()
+    try:
+        body = await request.json()
+        if not body:
+            raise HTTPException(status_code=400, detail="Empty request body.")
+
+        initial_state: dict[str, Any] = {
+            "rawBillText": body.get("rawBillText"),
+            "imageBase64": body.get("imageBase64"),
+            "existingBillData": body.get("existingBillData", {}),
+        }
+
+        result = await bill_decoder_app.invoke(initial_state)
+        final_bill = result.get("finalBillData")
+
+        if not final_bill:
+            raise HTTPException(status_code=500, detail="Bill decoding produced no output.")
+
+        return BillDecodeResponse(
+            success=True,
+            message="Bill decoded successfully.",
+            data={
+                "bill": final_bill,
+                "ocrConfidence": result.get("ocrConfidence", 0.0),
+                "requiresUserVerification": result.get("requiresUserVerification", True),
+                "validationIssues": result.get("validationIssues", []),
+                "durationMs": round((time.time() - start_time) * 1000),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(f"Bill Decoder Error: {error}")
+        raise HTTPException(status_code=500, detail=str(error))
+
+
+# ── Upgrade Advisor Endpoint ──────────────────────────────────────────
+@app.post("/upgrade-advice", response_model=UpgradeResponse)
+async def upgrade_advice(
+    request: Request,
+    x_user_id: Optional[str] = Header(None),
+):
+    """
+    Generate appliance upgrade recommendations via the Upgrade Advisor multi-agent workflow.
+
+    Expected body:
+      {
+        "appliances": [ ...user appliance objects... ],
+        "bills": [ ...past bill objects... ],
+        "user": { "location": "Mumbai" }   // optional, for weather fetch
+      }
+    """
+    start_time = time.time()
+    try:
+        body = await request.json()
+        if not body:
+            raise HTTPException(status_code=400, detail="Empty request body.")
+
+        # Fetch weather for upgrade context
+        user_location = "India"
+        if isinstance(body.get("user"), dict):
+            user_location = body["user"].get("location", "India")
+        weather_context = await _fetch_weather(user_location)
+
+        initial_state: dict[str, Any] = {
+            "appliances": body.get("appliances", []),
+            "bills": body.get("bills", []),
+            "weatherContext": weather_context,
+        }
+
+        result = await upgrade_advisor_app.invoke(initial_state)
+        recommendations = result.get("upgradeRecommendations")
+
+        if not recommendations:
+            raise HTTPException(
+                status_code=500, detail="Upgrade advisor produced no recommendations."
+            )
+
+        return UpgradeResponse(
+            success=True,
+            message="Upgrade recommendations generated.",
+            data={
+                "recommendations": recommendations,
+                "weatherContext": weather_context,
+                "durationMs": round((time.time() - start_time) * 1000),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(f"Upgrade Advisor Error: {error}")
+        raise HTTPException(status_code=500, detail=str(error))
+
+
 # ── Main ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
@@ -358,3 +487,4 @@ if __name__ == "__main__":
         port=port,
         reload=True,
     )
+

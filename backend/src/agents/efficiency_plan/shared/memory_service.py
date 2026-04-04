@@ -14,6 +14,7 @@ from .memory_keys import assert_memory_identity
 from .memory_schema import validate_memory_event
 from .redaction import redact_memory_payload
 from . import memory_store_redis as memory_store
+from . import semantic_memory
 
 
 def _build_revision_id() -> str:
@@ -42,7 +43,13 @@ async def write_event(input_data: dict | None = None) -> dict:
         message = str(error)
         raise ApiError(400, message)
 
-    return await memory_store.append_event(identity, parsed["data"])
+    result = await memory_store.append_event(identity, parsed["data"])
+    
+    # Store to Pinecone index in background
+    import asyncio
+    asyncio.create_task(semantic_memory.embed_and_store(identity, parsed["data"]))
+    
+    return result
 
 
 async def get_recent(scope: dict, *, limit: int = 12) -> list[dict]:
@@ -54,6 +61,15 @@ async def get_recent(scope: dict, *, limit: int = 12) -> list[dict]:
 async def get_historical(
     scope: dict, query: str = "", options: dict | None = None
 ) -> list[dict]:
-    """Get historical events, optionally filtered by query."""
+    """Get historical events, optionally filtered by query (semantically if Pinecone enabled)."""
     identity = assert_memory_identity(scope)
+    
+    # Use Pinecone semantic search if a query is provided and Pinecone is active
+    if query and semantic_memory._index is not None:
+        top_k = options.get("maxItems", 15) if options else 15
+        semantic_results = await semantic_memory.semantic_search(identity, query, top_k=top_k)
+        if semantic_results:
+            return semantic_results
+            
+    # Fallback to simple keyword match via Redis / memory fallback
     return await memory_store.list_historical_events(identity, query, options)

@@ -32,27 +32,25 @@ async def run_analyst(state: dict[str, Any]) -> dict[str, Any]:
             return {"anomalies": []}
 
         system_message = get_analyst_prompt()
-        user_message = HumanMessage(
-            content=f"Analyze this user data:\n{json.dumps(state['userData'], indent=2, default=str)}"
+        context_string = (
+            f"Analyze this user data:\n{json.dumps(state.get('userData', {}), indent=2, default=str)}\n\n"
+            f"Past Memory Context (from Vector DB):\n{json.dumps(state.get('memoryContext', []), indent=2, default=str)}\n\n"
+            f"Current Weather Context: {state.get('weatherContext', 'Unknown/Average Weather')}\n"
         )
+        user_message = HumanMessage(content=context_string)
 
-        if os.environ.get("DEEPSEEK_API_KEY"):
+        if os.environ.get("OPENROUTER_API_KEY"):
             response = await llm.ainvoke([system_message, user_message])
 
-            # Basic JSON extraction and sanitization
-            raw_json_str = response.content
-            if raw_json_str.startswith("```json"):
-                raw_json_str = re.sub(r"```json\n?", "", raw_json_str)
-                raw_json_str = re.sub(r"```\n?", "", raw_json_str)
-            elif raw_json_str.startswith("```"):
-                raw_json_str = re.sub(r"```\n?", "", raw_json_str)
+            # Robust JSON extraction — strip any markdown fencing
+            raw_json_str = re.sub(r"```(?:json)?\n?", "", response.content).strip()
 
-            parsed_anomalies = json.loads(raw_json_str.strip())
+            parsed_anomalies = json.loads(raw_json_str)
             print(f"--> [Node] Analyst completed. Found {len(parsed_anomalies)} anomalies.")
 
             return {"anomalies": parsed_anomalies}
         else:
-            print("--> [Node] Analyst using mock fallback (no DEEPSEEK_API_KEY found).")
+            print("--> [Node] Analyst using mock fallback (no OPENROUTER_API_KEY found.)")  # noqa: E501
             return {
                 "anomalies": [
                     {
