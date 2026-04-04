@@ -301,15 +301,8 @@ function _istHour() {
 
 /** Check if appliance is within active hours */
 function _isActiveHour(model) {
-  if (!model.activeHours) return true;
-  const h = _istHour();
-  const ah = model.activeHours;
-  // Support multiple pairs: [start1, end1, start2, end2]
-  for (let i = 0; i < ah.length; i += 2) {
-    const s = ah[i], e = ah[i + 1];
-    if (s <= e ? (h >= s && h < e) : (h >= s || h < e)) return true;
-  }
-  return false;
+  // Always return true to allow appliances to simulate wattage regardless of the time.
+  return true;
 }
 
 /** Retrieve model for a given appliance category */

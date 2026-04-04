@@ -726,16 +726,31 @@ class _DataView extends ConsumerWidget {
   }
 
   Widget _buildSmartPlugSection(BuildContext context, WidgetRef ref) {
-    final wsState = ref.watch(wsTelemetryProvider);
-    final liveData = wsState.liveData;
+    final wsState    = ref.watch(wsTelemetryProvider);
+    final plugsAsync = ref.watch(smartPlugListProvider);
+    final liveData   = wsState.liveData;
 
-    if (liveData.isEmpty) {
-      // Fall back to a "register plug" nudge
-      return const SizedBox.shrink();
-    }
+    // Derive plug list from WS data OR fallback to REST list
+    final plugList = plugsAsync.valueOrNull ?? [];
 
-    final totalW   = wsState.totalLiveWattage;
-    final anomalies = wsState.anomalousPlugs.length;
+    // Nothing to show if no plugs registered at all
+    if (liveData.isEmpty && plugList.isEmpty) return const SizedBox.shrink();
+
+    // Build a display list merging REST + WS wattage
+    final displayPlugs = plugList.map((plug) {
+      final live = liveData[plug.plugId];
+      final wattage = live?.wattage ?? plug.lastReading?.wattage ?? 0.0;
+      final isAnomaly = live?.isAnomaly ?? (plug.lastReading?.isAnomaly ?? false);
+      return (plug: plug, wattage: wattage, isAnomaly: isAnomaly, isLive: live != null);
+    }).toList();
+
+    // Total wattage: prefer WS sum when available, else sum DB snapshots
+    final totalW = liveData.isNotEmpty
+        ? wsState.totalLiveWattage
+        : plugList.fold<double>(0.0, (s, p) => s + (p.lastReading?.wattage ?? 0.0));
+
+    final anomalyCount = displayPlugs.where((e) => e.isAnomaly).length;
+    final isLiveStreaming = liveData.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -743,7 +758,7 @@ class _DataView extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSectionTitle('Smart Plugs', showIndicator: anomalies > 0),
+            _buildSectionTitle('Smart Plugs', showIndicator: anomalyCount > 0),
             GestureDetector(
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
@@ -758,7 +773,7 @@ class _DataView extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 12),
-        // Live wattage card
+        // Live wattage total card
         GestureDetector(
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SmartPlugScreen()),
@@ -798,7 +813,7 @@ class _DataView extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      '${liveData.length} plug${liveData.length > 1 ? 's' : ''} · Live',
+                      '${plugList.length} plug${plugList.length > 1 ? 's' : ''} · ${isLiveStreaming ? 'Live' : 'Last known'}',
                       style: GoogleFonts.poppins(
                         color: Colors.white.withOpacity(0.8),
                         fontSize: 11,
@@ -807,10 +822,9 @@ class _DataView extends ConsumerWidget {
                   ],
                 ),
                 const Spacer(),
-                if (anomalies > 0)
+                if (anomalyCount > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEF4444),
                       borderRadius: BorderRadius.circular(10),
@@ -821,7 +835,7 @@ class _DataView extends ConsumerWidget {
                             color: Colors.white, size: 14),
                         const SizedBox(width: 4),
                         Text(
-                          '$anomalies Alert${anomalies > 1 ? 's' : ''}',
+                          '$anomalyCount Alert${anomalyCount > 1 ? 's' : ''}',
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 11,
@@ -838,6 +852,114 @@ class _DataView extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        // Per-plug mini cards
+        ...displayPlugs.map((item) {
+          final color = item.isAnomaly
+              ? const Color(0xFFEF4444)
+              : item.isLive
+                  ? const Color(0xFF10B981)
+                  : const Color(0xFF94A3B8);
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: item.isAnomaly
+                    ? const Color(0xFFEF4444).withOpacity(0.4)
+                    : Colors.grey.shade100,
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    item.isAnomaly
+                        ? Icons.warning_amber_rounded
+                        : Icons.electrical_services_rounded,
+                    color: color,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.plug.name,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      if (item.plug.location != null)
+                        Text(
+                          item.plug.location!,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: const Color(0xFF94A3B8),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${item.wattage.toStringAsFixed(1)} W',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: item.isAnomaly
+                            ? const Color(0xFFEF4444)
+                            : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6, height: 6,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          item.isAnomaly ? 'Alert' : item.isLive ? 'Live' : 'Idle',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }

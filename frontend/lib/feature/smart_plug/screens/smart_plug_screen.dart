@@ -36,7 +36,11 @@ class _SmartPlugScreenState extends ConsumerState<SmartPlugScreen> {
   void _connectWs() {
     final user = ref.read(authStateProvider).valueOrNull;
     if (user != null) {
-      ref.read(wsTelemetryProvider.notifier).connect(user.uid);
+      Future.microtask(() {
+        if (mounted) {
+          ref.read(wsTelemetryProvider.notifier).connect(user.uid);
+        }
+      });
     }
   }
 
@@ -137,7 +141,7 @@ class _SmartPlugScreenState extends ConsumerState<SmartPlugScreen> {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
             children: [
               // Live summary header
-              _LiveSummaryCard(wsState: wsState, plugCount: plugs.length),
+              _LiveSummaryCard(wsState: wsState, plugs: plugs),
               const SizedBox(height: 20),
 
               // Per-plug live cards
@@ -248,12 +252,17 @@ class _SmartPlugScreenState extends ConsumerState<SmartPlugScreen> {
 // ── Live summary card ─────────────────────────────────────────────────────────
 class _LiveSummaryCard extends StatelessWidget {
   final WsTelemetryState wsState;
-  final int plugCount;
-  const _LiveSummaryCard({required this.wsState, required this.plugCount});
+  final List<SmartPlugModel> plugs;
+  const _LiveSummaryCard({required this.wsState, required this.plugs});
 
   @override
   Widget build(BuildContext context) {
-    final totalW    = wsState.totalLiveWattage;
+    final isStreaming = wsState.liveData.isNotEmpty;
+    // When WS is live → use summed live wattage.
+    // Before first tick → fall back to sum of DB lastReading snapshots.
+    final totalW = isStreaming
+        ? wsState.totalLiveWattage
+        : plugs.fold<double>(0.0, (s, p) => s + (p.lastReading?.wattage ?? 0.0));
     final anomalies = wsState.anomalousPlugs.length;
 
     return Container(
@@ -279,18 +288,24 @@ class _LiveSummaryCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Live Total',
+                isStreaming ? 'Live Total' : 'Last Reading',
                 style: GoogleFonts.poppins(
                     color: Colors.white.withOpacity(0.8), fontSize: 12),
               ),
               const Spacer(),
-              // Live pulse indicator
-              _PulseDot(),
-              const SizedBox(width: 5),
-              Text('LIVE',
-                  style: GoogleFonts.poppins(
-                      color: Colors.white, fontSize: 11,
-                      fontWeight: FontWeight.w700)),
+              if (isStreaming) ...[
+                _PulseDot(),
+                const SizedBox(width: 5),
+                Text('LIVE',
+                    style: GoogleFonts.poppins(
+                        color: Colors.white, fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ] else
+                const SizedBox(
+                  width: 14, height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+                ),
             ],
           ),
           const SizedBox(height: 4),
@@ -307,7 +322,7 @@ class _LiveSummaryCard extends StatelessWidget {
             children: [
               _InfoChip(
                   icon: Icons.electrical_services_rounded,
-                  label: '$plugCount plug${plugCount > 1 ? 's' : ''}',
+                  label: '${plugs.length} plug${plugs.length > 1 ? 's' : ''}',
                   color: Colors.white),
               if (anomalies > 0) ...[
                 const SizedBox(width: 8),
@@ -344,10 +359,12 @@ class _LivePlugCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wattage   = live?.wattage ?? 0.0;
-    final isAnomaly = live?.isAnomaly ?? false;
+    // Fall back to DB snapshot while WS hasn't sent a reading yet
+    final wattage   = live?.wattage ?? plug.lastReading?.wattage ?? 0.0;
+    final isAnomaly = live?.isAnomaly ?? plug.lastReading?.isAnomaly ?? false;
     final devState  = live?.deviceState;
     final history   = live?.history ?? [];
+    final isLive    = live != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -458,10 +475,33 @@ class _LivePlugCard extends StatelessWidget {
               ],
             ),
 
-            // ── Real-time mini chart ─────────────────────────────────────
-            if (history.isNotEmpty) ...[
+            // ── Status / real-time mini chart ────────────────────────────
+            if (isLive && history.isNotEmpty) ...[
               const SizedBox(height: 14),
               _MiniChart(readings: history, isAnomaly: isAnomaly),
+            ] else if (!isLive) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      color: plug.isOnline
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFF94A3B8),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    plug.isOnline ? 'Connecting to live stream…' : 'Last known reading',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              ),
             ],
 
             // ── Anomaly reason ────────────────────────────────────────────

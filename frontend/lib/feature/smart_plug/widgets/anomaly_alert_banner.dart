@@ -58,14 +58,19 @@ class _AnomalyAlertBannerState extends ConsumerState<AnomalyAlertBanner>
     if (anomalyKey != null && anomalyKey != _lastAnomalyType) {
       _lastAnomalyType = anomalyKey;
       _dismissed       = false;
-      _ctrl.forward();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ctrl.forward();
+      });
     }
 
     // Determine if we have live or REST-based anomaly
     final hasLiveAnomaly = wsState.hasAnomalies;
     final anomalousPlugs = wsState.anomalousPlugs;
 
-    if (_dismissed && !hasLiveAnomaly) return const SizedBox.shrink();
+    // Only show if there is an ACTUAL anomaly AND not dismissed
+    if (_dismissed || (!hasLiveAnomaly && anomalyEvent == null)) {
+      return const SizedBox.shrink();
+    }
 
     // Build message
     String title   = '⚡ Abnormal Usage Detected!';

@@ -58,11 +58,15 @@ function _cooldownKey(plugId) { return `ws:cd:${plugId}`; }
 async function _appendToWindow(plugId, wattage) {
   const redis = await _getRedis();
   if (redis) {
-    const key = _windowKey(plugId);
-    await redis.rpush(key, wattage);
-    await redis.ltrim(key, -WINDOW_SIZE, -1);
-    const raw = await redis.lrange(key, 0, -1);
-    return raw.map(Number);
+    try {
+      const key = _windowKey(plugId);
+      await redis.rpush(key, wattage);
+      await redis.ltrim(key, -WINDOW_SIZE, -1);
+      const raw = await redis.lrange(key, 0, -1);
+      return raw.map(Number);
+    } catch (err) {
+      _redis = null; // invalidate broken connection and fallback
+    }
   }
   // In-memory fallback
   const arr = _inMemoryStore.get(plugId) || [];
@@ -79,11 +83,15 @@ async function _appendToWindow(plugId, wattage) {
 async function _isInCooldown(plugId) {
   const redis = await _getRedis();
   if (redis) {
-    const key = _cooldownKey(plugId);
-    const exists = await redis.get(key);
-    if (exists) return true;
-    await redis.set(key, '1', 'EX', ANOMALY_COOLDOWN_S);
-    return false;
+    try {
+      const key = _cooldownKey(plugId);
+      const exists = await redis.get(key);
+      if (exists) return true;
+      await redis.set(key, '1', 'EX', ANOMALY_COOLDOWN_S);
+      return false;
+    } catch (err) {
+      _redis = null;
+    }
   }
   return false; // no cooldown tracking in memory fallback
 }
@@ -130,11 +138,11 @@ async function analyseReading({ plug, appliance, wattage, voltage, current, powe
       if (sig > 0) {
         anomalyScore = (wattage - mu) / sig;
 
-        if (Math.abs(anomalyScore) > ANOMALY_THRESHOLD) {
+        // Flag anomaly only on positive spikes and if the absolute increase is meaningful (> 15W)
+        if (anomalyScore > ANOMALY_THRESHOLD && (wattage - mu) > 15) {
           isAnomaly     = true;
           const pct     = Math.round(((wattage - mu) / mu) * 100);
-          const dir     = wattage > mu ? 'higher' : 'lower';
-          anomalyReason = `Consumption is ${Math.abs(pct)}% ${dir} than the recent baseline (${Math.round(mu)}W avg). Z-score: ${anomalyScore.toFixed(2)}.`;
+          anomalyReason = `Consumption is ${Math.abs(pct)}% higher than the recent baseline (${Math.round(mu)}W avg). Z-score: ${anomalyScore.toFixed(2)}.`;
         }
       }
     }
