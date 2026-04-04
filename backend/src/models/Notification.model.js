@@ -21,6 +21,7 @@ const NotificationSchema = new mongoose.Schema(
         'bill_uploaded',
         'bill_due_soon',
         'high_usage_alert',
+        'smart_plug_anomaly',
         'insight_ready',
         'generic',
       ],

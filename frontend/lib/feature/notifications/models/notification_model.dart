@@ -32,4 +32,14 @@ class AppNotification {
           DateTime.now(),
     );
   }
+
+  /// True when this notification represents an abnormal power consumption alert.
+  bool get isAnomalyAlert =>
+      type == 'high_usage_alert' || type == 'smart_plug_anomaly';
+
+  /// Plug name extracted from data payload (if present).
+  String? get anomalyPlugName => data['plugName'] as String?;
+
+  /// Wattage string extracted from data payload (if present).
+  String? get anomalyWattage => data['wattage'] as String?;
 }

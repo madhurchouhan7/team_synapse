@@ -56,5 +56,12 @@ class ApiConstants {
   // ── BBPS Routes ───────────────────────────────────────────────────────────
   static const String bbpsFetchBill = '/bbps/fetch-bill';
 
+  // ── Smart Plug Routes ─────────────────────────────────────────────────────
+  static const String smartPlugs        = '/smart-plugs';
+  static const String smartPlugsSummary = '/smart-plugs/summary';
+  static String smartPlugById(String id)           => '/smart-plugs/$id';
+  static String smartPlugTelemetry(String id)      => '/smart-plugs/$id/telemetry';
+  static String smartPlugSimulate(String id)       => '/smart-plugs/$id/simulate';
+
   // ── (Add more as you build features) ─────────────────────────────────────
 }

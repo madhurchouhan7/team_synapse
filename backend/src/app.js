@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const { initFirebase } = require('../config/firebase');
 const connectDB = require('../config/db');
+const { startTelemetryPoller } = require('./jobs/telemetryPoller');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { sanitizeInput, preventNoSQLInjection, contentSecurityPolicy } = require('./middleware/security.middleware');
 const { rateLimiters, rateLimitStatus } = require('./middleware/rateLimit.middleware');
@@ -24,6 +25,10 @@ initFirebase();
 
 // ─── Connect to Database ───────────────────────────────────────────────────────
 connectDB();
+
+// ─── Start background jobs ────────────────────────────────────────────────────
+// Telemetry poller: reads smart plug data every 30s and runs anomaly detection
+startTelemetryPoller();
 
 const app = express();
 

@@ -350,6 +350,35 @@ const schemas = {
         .optional(),
     })
     .strict(),
+
+  // ── Smart Plug schemas ────────────────────────────────────────────────────
+  registerSmartPlug: z
+    .object({
+      name: z.string().trim().min(1, "Plug name is required").max(100, "Name too long"),
+      applianceId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid appliance ID").optional(),
+      vendor: z
+        .enum(["tasmota", "shelly", "tplink_kasa", "tuya", "simulator", "webhook", "other"])
+        .optional()
+        .default("simulator"),
+      isSimulated: z.boolean().optional().default(true),
+      location: z.string().trim().max(100).optional(),
+      baselineWattage: z.number().min(0).max(10000).optional(),
+      connectionConfig: z
+        .object({
+          ipAddress:      z.string().optional(),
+          cloudDeviceId:  z.string().optional(),
+          webhookSecret:  z.string().optional(),
+        })
+        .optional(),
+    }),
+
+  triggerSmartPlugReading: z
+    .object({
+      wattageOverride: z.number().min(0).max(15000).optional(),
+      forceSpike:      z.boolean().optional(),
+    })
+    .optional()
+    .default({}),
 };
 
 /**
