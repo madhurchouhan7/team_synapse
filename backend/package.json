@@ -1,7 +1,7 @@
 {
-  "name": "team_synapse-backend",
+  "name": "wattwise-backend",
   "version": "1.0.0",
-  "description": "REST API — Node.js + Express + MongoDB",
+  "description": "WattWise REST API — Node.js + Express + MongoDB",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
