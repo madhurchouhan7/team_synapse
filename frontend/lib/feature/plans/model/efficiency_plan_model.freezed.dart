@@ -230,8 +230,8 @@ return $default(_that.summary,_that.estimatedCurrentMonthlyCost,_that.estimatedS
 /// @nodoc
 
 
-class _EfficiencyPlanModel implements EfficiencyPlanModel {
-  const _EfficiencyPlanModel({required this.summary, required this.estimatedCurrentMonthlyCost, required this.estimatedSavingsIfFollowed, required this.efficiencyScore, required final  List<KeyAction> keyActions, required this.slabAlert, required final  List<String> quickWins, required this.monthlyTip}): _keyActions = keyActions,_quickWins = quickWins;
+class _EfficiencyPlanModel extends EfficiencyPlanModel {
+  const _EfficiencyPlanModel({required this.summary, required this.estimatedCurrentMonthlyCost, required this.estimatedSavingsIfFollowed, required this.efficiencyScore, required final  List<KeyAction> keyActions, required this.slabAlert, required final  List<String> quickWins, required this.monthlyTip}): _keyActions = keyActions,_quickWins = quickWins,super._();
   
 
 @override final  String summary;
@@ -533,8 +533,8 @@ return $default(_that.units,_that.rupees,_that.percentage);case _:
 /// @nodoc
 
 
-class _EstimatedSavings implements EstimatedSavings {
-  const _EstimatedSavings({required this.units, required this.rupees, required this.percentage});
+class _EstimatedSavings extends EstimatedSavings {
+  const _EstimatedSavings({required this.units, required this.rupees, required this.percentage}): super._();
   
 
 @override final  double units;
@@ -798,8 +798,8 @@ return $default(_that.priority,_that.appliance,_that.action,_that.impact,_that.e
 /// @nodoc
 
 
-class _KeyAction implements KeyAction {
-  const _KeyAction({required this.priority, required this.appliance, required this.action, required this.impact, required this.estimatedSaving});
+class _KeyAction extends KeyAction {
+  const _KeyAction({required this.priority, required this.appliance, required this.action, required this.impact, required this.estimatedSaving}): super._();
   
 
 @override final  String priority;
@@ -1067,8 +1067,8 @@ return $default(_that.isInDangerZone,_that.currentSlab,_that.nextSlabAt,_that.un
 /// @nodoc
 
 
-class _SlabAlert implements SlabAlert {
-  const _SlabAlert({required this.isInDangerZone, required this.currentSlab, this.nextSlabAt, this.unitsToNextSlab, this.warning});
+class _SlabAlert extends SlabAlert {
+  const _SlabAlert({required this.isInDangerZone, required this.currentSlab, this.nextSlabAt, this.unitsToNextSlab, this.warning}): super._();
   
 
 @override final  bool isInDangerZone;

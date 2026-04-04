@@ -1,10 +1,11 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'efficiency_plan_model.freezed.dart';
-part 'efficiency_plan_model.g.dart';
 
 @freezed
 abstract class EfficiencyPlanModel with _$EfficiencyPlanModel {
+  const EfficiencyPlanModel._();
+
   const factory EfficiencyPlanModel({
     required String summary,
     required double estimatedCurrentMonthlyCost,
@@ -40,10 +41,25 @@ abstract class EfficiencyPlanModel with _$EfficiencyPlanModel {
       monthlyTip: _asString(json['monthlyTip'], fallback: ''),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'summary': summary,
+      'estimatedCurrentMonthlyCost': estimatedCurrentMonthlyCost,
+      'estimatedSavingsIfFollowed': estimatedSavingsIfFollowed.toJson(),
+      'efficiencyScore': efficiencyScore,
+      'keyActions': keyActions.map((e) => e.toJson()).toList(),
+      'slabAlert': slabAlert.toJson(),
+      'quickWins': quickWins,
+      'monthlyTip': monthlyTip,
+    };
+  }
 }
 
 @freezed
 abstract class EstimatedSavings with _$EstimatedSavings {
+  const EstimatedSavings._();
+
   const factory EstimatedSavings({
     required double units,
     required double rupees,
@@ -57,10 +73,16 @@ abstract class EstimatedSavings with _$EstimatedSavings {
       percentage: _asDouble(json['percentage']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {'units': units, 'rupees': rupees, 'percentage': percentage};
+  }
 }
 
 @freezed
 abstract class KeyAction with _$KeyAction {
+  const KeyAction._();
+
   const factory KeyAction({
     required String priority,
     required String appliance,
@@ -78,10 +100,22 @@ abstract class KeyAction with _$KeyAction {
       estimatedSaving: _asString(json['estimatedSaving'], fallback: '0'),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'priority': priority,
+      'appliance': appliance,
+      'action': action,
+      'impact': impact,
+      'estimatedSaving': estimatedSaving,
+    };
+  }
 }
 
 @freezed
 abstract class SlabAlert with _$SlabAlert {
+  const SlabAlert._();
+
   const factory SlabAlert({
     required bool isInDangerZone,
     required String currentSlab,
@@ -98,6 +132,16 @@ abstract class SlabAlert with _$SlabAlert {
       unitsToNextSlab: _asNullableDouble(json['unitsToNextSlab']),
       warning: json['warning'] == null ? null : _asString(json['warning']),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'isInDangerZone': isInDangerZone,
+      'currentSlab': currentSlab,
+      'nextSlabAt': nextSlabAt,
+      'unitsToNextSlab': unitsToNextSlab,
+      'warning': warning,
+    };
   }
 }
 

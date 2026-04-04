@@ -1,0 +1,21 @@
+flutter_native_splash:
+  # 1. Background Color (Matches top of your Flutter gradient)
+  color: "#1E3A8A"
+
+  # 2. The Image (Center logo)
+  # Ensure this path matches where your mascot PNG actually is.
+  image: "assets/icon/icon_foreground_splash.png"
+
+  # 3. Branding (Optional - remove if you want just the logo)
+  # branding: "assets/splash/branding.png"
+
+  branding_mode: "bottom" # Position of the branding image (top, center, bottom)
+
+  # 4. Android 12+ Specifics (Crucial for modern phones)
+  android_12:
+    image: "assets/icon/icon_foreground_splash.png"
+    icon_background_color: "#1E3A8A"
+    # branding: "assets/splash/branding.png"
+
+  # 5. Fullscreen mode
+  fullscreen: true

@@ -1,0 +1,16 @@
+# flutter_launcher_icons.yaml
+flutter_icons:
+  # 1. General Settings
+  android: "launcher_icon" # The name of the icon file generated in Android
+  ios: true # Generate for iOS
+
+  # 2. Standard Icon (For iOS and older Android devices)
+  # This uses your transparent image, and iOS will automatically put it on a black/white square.
+  image_path: "assets/icon/icon_foreground.png"
+  remove_alpha_ios: true # Recommended for App Store compliance
+
+  # 3. Android Adaptive Icons (The professional way for modern Android)
+  # The mascot sits on top layer
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  # The solid color sits on the back layer.
+  adaptive_icon_background: "#2563EB"
