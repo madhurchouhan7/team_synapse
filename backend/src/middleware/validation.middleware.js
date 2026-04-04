@@ -80,6 +80,7 @@ const schemas = {
         .string()
         .trim()
         .url("Avatar URL must be a valid HTTP/HTTPS URL")
+        .or(z.string().length(0))
         .optional(),
       address: z.object({
         state: z.string().optional(),

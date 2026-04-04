@@ -364,18 +364,8 @@ function _advanceState(s, model, now) {
   }
 }
 
-function _stateDistance(model, state, now) {
-  // Check defrost for refrigerator
-  if (state === 'compressor_on' &&
-      model.defrostIntervalMs &&
-      (now - (arguments[3] || 0)) > model.defrostIntervalMs) {
-    return 0; // immediately trigger defrost
-  }
-  return _stateDistance(model, state);
-}
-
-// Simpler version without overload confusion
-function _stateDistance2(model, state) {
+/** Compute duration (ms) for a state from the model */
+function _stateDistance(model, state) {
   const t = model.transitions[state];
   if (!t) return 30_000;
   return _randInt(t.minSec, t.maxSec) * 1000;
@@ -495,7 +485,7 @@ function readPlug(plug, appliance = null, opts = {}) {
     if (quietState !== s.state) {
       s.state        = quietState;
       s.stateStartMs = now;
-      s.stateEndMs   = now + _stateDistance2(model, quietState);
+      s.stateEndMs   = now + _stateDistance(model, quietState);
     }
   }
 
@@ -508,7 +498,7 @@ function readPlug(plug, appliance = null, opts = {}) {
       now - s.lastDefrostMs > model.defrostIntervalMs) {
     s.state        = 'defrost';
     s.stateStartMs = now;
-    s.stateEndMs   = now + _stateDistance2(model, 'defrost');
+    s.stateEndMs   = now + _stateDistance(model, 'defrost');
     s.lastDefrostMs = now;
   }
 
@@ -581,7 +571,7 @@ function forceState(plugId, targetState) {
   if (!model.states.includes(targetState)) return false;
   s.state        = targetState;
   s.stateStartMs = Date.now();
-  s.stateEndMs   = Date.now() + _stateDistance2(model, targetState);
+  s.stateEndMs   = Date.now() + _stateDistance(model, targetState);
   return true;
 }
 
